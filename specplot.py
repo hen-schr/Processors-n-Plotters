@@ -114,27 +114,20 @@ def extend_to_current_path(file: str):
     return __file__[:__file__.rfind("\\")] + "\\" + file
 
 
-def main():
+def example():
+    """
+    Demonstration of possible processing using this script. Will only work if example files are accessible.
+    :return: None
+    """
 
     files = [
-        "HS_T001_S1.csv",
-        "HS_T001_S2.csv",
-        "HS_T001_S3.csv"
-    ]
-
-    for file in files:
-        plot_full_spectrum(file=file)
-    plt.legend()
-    plt.show()
-
-    files = [
-        "HS_T001_K1.csv",
-        "HS_T001_K2.csv",
-        "HS_T001_K3.csv",
-        "HS_T001_K4.csv",
-        "HS_T001_K5.csv",
-        "HS_T001_K6.csv",
-        "HS_T001_K7.csv"
+        "Examples/HS_T001_K1.csv",
+        "Examples/HS_T001_K2.csv",
+        "Examples/HS_T001_K3.csv",
+        "Examples/HS_T001_K4.csv",
+        "Examples/HS_T001_K5.csv",
+        "Examples/HS_T001_K6.csv",
+        "Examples/HS_T001_K7.csv"
     ]
 
     concentrations = [0.0075, 0.005, 0.0025, 0.001, 0.0005, 0.0001, 0.01]
@@ -158,6 +151,14 @@ def main():
 
     plt.legend()
     plt.show()
+
+
+def main():
+    """
+    Define processing steps here. See example() for reference.
+    :return: None
+    """
+    pass
 
 
 if __name__ == "__main__":
