@@ -4,8 +4,6 @@ import scipy.optimize as opt
 import numpy as np
 import json
 
-plt.style.use("dark_background")
-
 
 def exp_function(x, a, b, c, d):
     y = c - a * np.exp(-x * b + d)
@@ -35,20 +33,20 @@ def read_json_file(file_path):
             data = json.load(file)
         return data
     except FileNotFoundError:
-        print(f"Die Datei {file_path} wurde nicht gefunden.")
+        print(f"File {file_path} does not exist.")
     except json.JSONDecodeError:
-        print(f"Die Datei {file_path} enthält kein gültiges JSON.")
+        print(f"File {file_path} does not contain valid JSON.")
     except Exception as e:
-        print(f"Ein Fehler ist aufgetreten: {e}")
+        print(f"An error occurred: {e}")
 
 
-def process_data(x, y):
-    moving_average = np.convolve(y, np.ones(25)/25, "full")
+def filter_data(x, y, smooth_factor=25, threshold=0.03):
+    moving_average = np.convolve(y, np.ones(smooth_factor)/smooth_factor, "full")
     
     new_x, new_y = ([], [])
     
     for i, value in enumerate(y):
-        if abs(value - moving_average[i]) / value <= 0.03:
+        if abs(value - moving_average[i]) / value <= threshold:
             new_x.append(x[i])
             new_y.append(value)
 
@@ -67,18 +65,15 @@ def process_data_t(x, y):
             new_x.append(x[i])
             new_y.append(value)
     
-    print(f"""Filtered out {len(x) - len(new_x)} from {len(x)} overall datapoints ({round((len(x) - len(new_x)) / len(x) * 100, 2)} %).""")
+    print(f"""Filtered out {len(x) - len(new_x)} from {len(x)} overall datapoints 
+    ({round((len(x) - len(new_x)) / len(x) * 100, 2)} %).""")
     
     return new_x, new_y
 
 
-def update_plot(parameters, ax):
-    
-    smooth_fit = False
-    
-    ax.clear()
-    
-    with open("Examples/HS_F024_2.txt") as readfile:
+def read_data_file(file, return_relative_time=True, start_time=None):
+
+    with open(file) as readfile:
         data = readfile.read()
 
     lines = data.split("\n")
@@ -93,109 +88,188 @@ def update_plot(parameters, ax):
             line = line.replace(",", ".")
             values = line.split("; ")
             if len(values) == 4:
-                t, pf, m, fv = datetime.strptime(values[0], "%H:%M:%S"), float(values[1]), float(values[2]), float(values[3])
+                t, pf, m, fv = datetime.strptime(values[0], "%H:%M:%S"), float(values[1]), float(values[2]), float(
+                    values[3])
                 exp_time.append(t)
                 pump_flow.append(float(pf))
                 mass.append(float(m))
                 permeate_flow.append(fv)
 
-    tim = []
+    relative_time = []
+
+    if start_time is not None:
+        start_time = datetime.strptime(start_time, "%H:%M:%S")
+    else:
+        start_time = exp_time[0]
 
     for t in exp_time:
-        tim.append((t-exp_time[0]).total_seconds() / 60)
-    
-    permeate_flow_mLmin = []
+        relative_time.append((t - start_time).total_seconds() / 60)
+
+    permeate_flow_mlmin = []
 
     for val in permeate_flow:
-        permeate_flow_mLmin.append(val*16.666)
-    
-    smoothing_factor = parameters["smoothing"]
-    
-    moving_avg_permeate_flow = np.convolve(permeate_flow_mLmin, np.ones(smoothing_factor)/smoothing_factor, "full")
-    
+        permeate_flow_mlmin.append(val * 16.666)
+
+    if return_relative_time:
+        return relative_time, mass, pump_flow, permeate_flow_mlmin
+    else:
+        return exp_time, mass, pump_flow, permeate_flow_mlmin
+
+
+def smooth_curve(x, y, smoothing_factor, plot=True, widget=None, mode="full", label="moving average"):
+    moving_average = np.convolve(y, np.ones(smoothing_factor) / smoothing_factor, mode)
+
+    label += f" (over {smoothing_factor} points)"
+
+    if plot and widget is not None:
+        widget.plot(x, y, label=label)
+    elif plot and widget is None:
+        widget = plt.gca()
+        widget.plot(x, y, label=label)
+
+    return moving_average
+
+
+def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=None,
+                     style_raw="o", color_raw=None, style_fit="-", color_fit=None,
+                     show_fit_interval=True, show_equilibrium_value=True, display_info=True,
+                     title="Permeate Flux", data_name=None, plot=True):
+
+    results = None
+
+    if ax is None and plot:
+        ax = plt.gca()
+
+    relative_time, permeate_flow_mlmin = data
+
     optimization_start = parameters["fit_start"]
     optimization_end = parameters["fit_end"]
     
     start = 0
     end = -1
 
-    for t in tim:
+    for t in relative_time:
         if t >= optimization_start:
-            start = tim.index(t)
+            start = relative_time.index(t)
             break
-    for t in tim:
+    for t in relative_time:
         if t >= optimization_end:
-            end = tim.index(t)
+            end = relative_time.index(t)
             break
 
-    ax.plot(tim, permeate_flow_mLmin, "o", color="#8dd3c7")
+    if plot:
+        ax.plot(relative_time, permeate_flow_mlmin, style_raw, color=color_raw, label=data_name)
     
     try:
         
-        if smooth_fit:
-            raise RuntimeError
-        
-        optimized_parameters, pcov = opt.curve_fit(exp_function, tim[start:end], permeate_flow_mLmin[start:end], bounds=[-150, 150])
+        optimized_parameters, pcov = opt.curve_fit(exp_function, relative_time[start:end], permeate_flow_mlmin[start:end],
+                                                   bounds=fit_bounds)
         resolved_x = np.linspace(optimization_start, optimization_end + 30, 100)
 
-        r_squared = calculate_r_squared(tim[start:end], permeate_flow_mLmin[start:end], optimized_parameters, exp_function)
+        r_squared = calculate_r_squared(relative_time[start:end], permeate_flow_mlmin[start:end],
+                                        optimized_parameters, exp_function)
     
-        equilibrium_time = (- np.log((- 0.01 * optimized_parameters[2]) / optimized_parameters[0]) + optimized_parameters[3]) / optimized_parameters[1]
+        equilibrium_time = (- np.log((- 0.01 * optimized_parameters[2]) / optimized_parameters[0]) +
+                            optimized_parameters[3]) / optimized_parameters[1]
         equilibrium_time = round(equilibrium_time, 0)
         
-        ax.plot(resolved_x, exp_function(np.asarray(resolved_x), *optimized_parameters), "-", color="#feffb3")
-        
-        ax.text(0.01, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
-        ax.text(0.01, 0.90, f"pred. $F_V$ = {round(optimized_parameters[2], 2)} mL / min", transform=ax.transAxes)
-        ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
-        
-        ax.vlines(equilibrium_time, 0 , 10, linestyles="dotted")
-        ax.hlines(optimized_parameters[2], optimization_start, equilibrium_time + 10, linestyles="dotted")
+        if plot:
+            ax.plot(resolved_x, exp_function(np.asarray(resolved_x), *optimized_parameters),
+                    style_fit, color=color_fit, label=f"fit for {data_name}" if data_name is not None else None)
+            ax.set_title(title)
+            ax.set_xlabel("$t - t_0$ / min")
+
+            if display_info:
+                ax.text(0.01, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
+                ax.text(0.01, 0.90, f"pred. $F_V$ = {round(optimized_parameters[2], 2)} mL / min", transform=ax.transAxes)
+                ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
+
+            if show_equilibrium_value:
+                ax.vlines(equilibrium_time, 0, 10, linestyles="dotted")
+                ax.hlines(optimized_parameters[2], optimization_start, equilibrium_time + 10, linestyles="dotted")
+
+        results = {
+            "permeateFluxStabilized": optimized_parameters[2],
+            "rSquared": round(r_squared, 4),
+            "stabilizationTimeMin": equilibrium_time
+        }
         
     except RuntimeError:
-        try:
-            optimized_parameters, pcov = opt.curve_fit(exp_function, tim[start:end], moving_avg_permeate_flow[start:end-smoothing_factor+1], bounds=[-150, 150])
-            resolved_x = np.linspace(optimization_start, optimization_end + 30, 100)
+        print("Could not fit to function using the given data!")
 
-            r_squared = calculate_r_squared(tim[start:end], moving_avg_permeate_flow[start:end-smoothing_factor+1], optimized_parameters, exp_function)
-        
-            equilibrium_time = (- np.log((- 0.01 * optimized_parameters[2]) / optimized_parameters[0]) + optimized_parameters[3]) / optimized_parameters[1]
-            equilibrium_time = round(equilibrium_time, 0)
-            
-            ax.plot(resolved_x, exp_function(np.asarray(resolved_x), *optimized_parameters), "-", color="#feffb3")
-            
-            ax.text(0.01, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
-            ax.text(0.01, 0.90, f"pred. $F_V$ = {round(optimized_parameters[2], 2)} mL / min", transform=ax.transAxes)
-            ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
-            
-            ax.vlines(equilibrium_time, 0 , 10, linestyles="dotted")
-            ax.hlines(optimized_parameters[2], optimization_start, equilibrium_time + 10, linestyles="dotted")
-            
-            print("Performed fitting from moving average")
-        except RuntimeError:
-            print("Could not fit to function using the given data!")
-    
-    # proc_time, proc_flow = process_data_t(tim, permeate_flow_mLmin)
-    
-    ax.set_title("Fitting")
-    ax.set_xlabel("$t - t_0$ / min")
-    
-    ax.plot(tim, moving_avg_permeate_flow[:-smoothing_factor+1], "-")
-    # flow_ax.plot(proc_time, proc_flow, "-")
-    
-    ax.vlines(tim[start], 0, 10, linestyles="dotted", color="#fa8174")
-    ax.vlines(tim[end], 0, 10, linestyles="dotted", color="#fa8174")       
+    if show_fit_interval and plot:
+        ax.vlines(relative_time[start], 0, 10, linestyles="dotted", color="#fa8174")
+        ax.vlines(relative_time[end], 0, 10, linestyles="dotted", color="#fa8174")
+
+    return results
 
 
 def main():
-    fig, ax = plt.subplots(1)
+    # plt.style.use("dark_background")
+
+    # fig, ax = plt.subplots(1)
 
     param_dict = read_json_file("Parameters/permeability.json")
 
-    update_plot(param_dict, ax=ax)
+    data_file = "Examples/HS_F024_2.txt"
+
+    data = read_data_file(data_file)
+
+    smooth_factors = [3, 6, 9, 12, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    thresholds = [0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.15, 0.17, 0.20, 0.25, 0.5, 1]
+    results = [[], [], []]
+    t_h_s = []
+    s_f_s = []
+
+    fig, ((ax, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+
+    for s_f in smooth_factors:
+        r_squared = []
+        eq_values = []
+        eq_times = []
+        used_t_h = []
+        for t_h in thresholds:
+            filtered_data = filter_data(data[0], data[3], smooth_factor=s_f, threshold=t_h)
+            result = plot_and_process(filtered_data, param_dict, fit_bounds=[-150, 150], plot=False)
+            used_t_h.append(t_h)
+            r_squared.append(result["rSquared"])
+            eq_values.append(result["permeateFluxStabilized"])
+            eq_times.append(result["stabilizationTimeMin"])
+            results[0].append(result["permeateFluxStabilized"])
+            results[1].append(result["stabilizationTimeMin"])
+            results[2].append(result["rSquared"])
+            t_h_s.append(t_h)
+            s_f_s.append(s_f)
+
+        ax.plot(used_t_h, eq_values, label=s_f)
+        ax2.plot(used_t_h, r_squared, label=s_f)
+        ax3.plot(used_t_h, eq_times, label=s_f)
+
+        ax.set_title("Stablized Permeate Flux")
+        ax2.set_title("$R^2$")
+        ax3.set_title("Equilbration Time")
+
+        ax.set_ylabel("Flux / $mL \; min^{-1}$")
+        ax2.set_ylabel("$R^2$")
+        ax3.set_ylabel("t / min")
+        ax.set_xlabel("Filter threshold")
+        ax2.set_xlabel("Filter threshold")
+        ax3.set_xlabel("Filter threshold")
+
+    ax.legend()
+    plt.show()
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection="3d")
+
+    ax.scatter(t_h_s, s_f_s, results[0])
+
+    ax.set_xlabel('Filter threshold')
+    ax.set_ylabel('Smoothing factor')
+    ax.set_zlabel('Stabilized permeate flux')
+
     plt.show()
 
 
 if __name__ == "__main__":
     main()
-
