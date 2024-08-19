@@ -41,12 +41,15 @@ def read_json_file(file_path):
 
 
 def filter_data(x, y, smooth_factor=25, threshold=0.03):
-    moving_average = np.convolve(y, np.ones(smooth_factor)/smooth_factor, "full")
+    if smooth_factor >= 3:
+        smooth_y = np.convolve(y, np.ones(smooth_factor)/smooth_factor, "full")
+    else:
+        smooth_y = y
     
     new_x, new_y = ([], [])
     
     for i, value in enumerate(y):
-        if abs(value - moving_average[i]) / value <= threshold:
+        if abs(value - smooth_y[i]) / value <= threshold:
             new_x.append(x[i])
             new_y.append(value)
 
@@ -208,9 +211,9 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
 
 def analyze_post_processing_parameters(data, fit_parameters, smooth_factors=None, thresholds=None):
     if smooth_factors is None:
-        smooth_factors = [3, 6, 9, 12, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        smooth_factors = [0, 3, 6, 9, 12, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     if thresholds is None:
-        thresholds = [0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.15, 0.17, 0.20, 0.25, 0.5, 1]
+        thresholds = [0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.15, 0.17, 0.20, 0.25, 0.5, 1.0]
 
     results = [[], [], [], []]
     used_thresholds = []
@@ -218,6 +221,7 @@ def analyze_post_processing_parameters(data, fit_parameters, smooth_factors=None
 
     fig, ((ax, ax2), (ax3, ax4)) = plt.subplots(2, 2)
 
+    # iterating over the different combinations of processing parameters
     for s_f in smooth_factors:
         r_squared = []
         eq_values = []
@@ -262,20 +266,48 @@ def analyze_post_processing_parameters(data, fit_parameters, smooth_factors=None
     ax.legend()
     plt.show()
 
-    fig = plt.figure()
-    ax = fig.add_subplot(projection="3d")
+    analyze_post_processing_results(used_smoothing_factors, used_thresholds, results)
 
-    ax.scatter(used_thresholds, used_smoothing_factors, results[3])
-
-    ax.set_xlabel('Filter threshold')
-    ax.set_ylabel('Smoothing factor')
-    ax.set_zlabel('pts preserved')
+    param_plot_3d(used_smoothing_factors, used_thresholds, results[0],
+                  "Stablized Permeate Flux (calculated) / $mL \; min^{-1}$")
+    param_plot_3d(used_smoothing_factors, used_thresholds, results[1], "Stablization Time (calc.) / min")
+    param_plot_3d(used_smoothing_factors, used_thresholds, results[2], "$R^2$ / -")
+    param_plot_3d(used_smoothing_factors, used_thresholds, results[3], "Pts Preserved / -")
 
     plt.show()
 
 
-def analyze_post_processing_results(smooth_factors, thresholds, results, r_min = .95, pts_min=.80):
-    pass
+def param_plot_3d(smooth_factors, thresholds, z_values, z_label=None):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection="3d")
+
+    ax.scatter(thresholds, smooth_factors, z_values)
+
+    ax.set_xlabel('Filter threshold')
+    ax.set_ylabel('Smoothing factor')
+    ax.set_zlabel(z_label)
+
+
+def analyze_post_processing_results(smooth_factors, thresholds, results, r_min=.9, pts_min=.7):
+    r_max_index = results[2].index(max(results[2]))
+    print(f"best R2 ({results[2][r_max_index]}): s = {smooth_factors[r_max_index]}, t = {thresholds[r_max_index]}")
+
+    closest_to_pts_min = 1
+    for i, pt in enumerate(results[3]):
+        diff = pt - pts_min
+        if 0 <= diff < closest_to_pts_min - pts_min and results[2][i] >= r_min:
+            closest_to_pts_min = pt
+
+    best_pts_index = results[3].index(closest_to_pts_min)
+    print(f"max_min pts ({round(results[3][best_pts_index] * 100, 2)} %): s = {smooth_factors[best_pts_index]}, "
+          f"t = {thresholds[best_pts_index]}, "
+          f"R2 = {results[2][best_pts_index]}")
+
+    mean_permeate_flux = (np.mean(results[0]), np.std(results[0]))
+    mean_stabilization_time = (np.mean(results[1]), np.std(results[1]))
+
+    print(mean_stabilization_time)
+    print(mean_permeate_flux)
 
 
 def main():
@@ -288,6 +320,9 @@ def main():
     data_file = "Examples/HS_F024_2.txt"
 
     data = read_data_file(data_file)
+
+    plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400])
+    plt.show()
 
     analyze_post_processing_parameters(data, param_dict)
 
