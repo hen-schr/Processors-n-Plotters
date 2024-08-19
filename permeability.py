@@ -50,7 +50,9 @@ def filter_data(x, y, smooth_factor=25, threshold=0.03):
             new_x.append(x[i])
             new_y.append(value)
 
-    return new_x, new_y
+    percentage_datapoints_preserved = len(new_x) / len(x)
+
+    return new_x, new_y, percentage_datapoints_preserved
     
 
 def process_data_t(x, y):
@@ -204,22 +206,15 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
     return results
 
 
-def main():
-    # plt.style.use("dark_background")
+def analyze_post_processing_parameters(data, fit_parameters, smooth_factors=None, thresholds=None):
+    if smooth_factors is None:
+        smooth_factors = [3, 6, 9, 12, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    if thresholds is None:
+        thresholds = [0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.15, 0.17, 0.20, 0.25, 0.5, 1]
 
-    # fig, ax = plt.subplots(1)
-
-    param_dict = read_json_file("Parameters/permeability.json")
-
-    data_file = "Examples/HS_F024_2.txt"
-
-    data = read_data_file(data_file)
-
-    smooth_factors = [3, 6, 9, 12, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-    thresholds = [0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.15, 0.17, 0.20, 0.25, 0.5, 1]
-    results = [[], [], []]
-    t_h_s = []
-    s_f_s = []
+    results = [[], [], [], []]
+    used_thresholds = []
+    used_smoothing_factors = []
 
     fig, ((ax, ax2), (ax3, ax4)) = plt.subplots(2, 2)
 
@@ -228,9 +223,12 @@ def main():
         eq_values = []
         eq_times = []
         used_t_h = []
+        pts_preserved = []
         for t_h in thresholds:
-            filtered_data = filter_data(data[0], data[3], smooth_factor=s_f, threshold=t_h)
-            result = plot_and_process(filtered_data, param_dict, fit_bounds=[-150, 150], plot=False)
+            filter_result = filter_data(data[0], data[3], smooth_factor=s_f, threshold=t_h)
+            pts_preserved.append(filter_result[2])
+            filtered_data = filter_result[0:2]
+            result = plot_and_process(filtered_data, fit_parameters, fit_bounds=[-150, 150], plot=False)
             used_t_h.append(t_h)
             r_squared.append(result["rSquared"])
             eq_values.append(result["permeateFluxStabilized"])
@@ -238,8 +236,9 @@ def main():
             results[0].append(result["permeateFluxStabilized"])
             results[1].append(result["stabilizationTimeMin"])
             results[2].append(result["rSquared"])
-            t_h_s.append(t_h)
-            s_f_s.append(s_f)
+            results[3].append(pts_preserved[-1])
+            used_thresholds.append(t_h)
+            used_smoothing_factors.append(s_f)
 
         ax.plot(used_t_h, eq_values, label=s_f)
         ax2.plot(used_t_h, r_squared, label=s_f)
@@ -256,19 +255,41 @@ def main():
         ax2.set_xlabel("Filter threshold")
         ax3.set_xlabel("Filter threshold")
 
+        ax4.scatter(results[0], results[2])
+        ax4.set_xlabel('Stablized Permeate Flux (calculated) / $mL \; min^{-1}$')
+        ax4.set_ylabel('$R^2$')
+
     ax.legend()
     plt.show()
 
     fig = plt.figure()
     ax = fig.add_subplot(projection="3d")
 
-    ax.scatter(t_h_s, s_f_s, results[0])
+    ax.scatter(used_thresholds, used_smoothing_factors, results[3])
 
     ax.set_xlabel('Filter threshold')
     ax.set_ylabel('Smoothing factor')
-    ax.set_zlabel('Stabilized permeate flux')
+    ax.set_zlabel('pts preserved')
 
     plt.show()
+
+
+def analyze_post_processing_results(smooth_factors, thresholds, results, r_min = .95, pts_min=.80):
+    pass
+
+
+def main():
+    # plt.style.use("dark_background")
+
+    # fig, ax = plt.subplots(1)
+
+    param_dict = read_json_file("Parameters/permeability.json")
+
+    data_file = "Examples/HS_F024_2.txt"
+
+    data = read_data_file(data_file)
+
+    analyze_post_processing_parameters(data, param_dict)
 
 
 if __name__ == "__main__":
