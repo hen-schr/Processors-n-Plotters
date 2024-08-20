@@ -130,14 +130,17 @@ def concentrations_from_spec_files(spec_files=None, wavelength=None, conversion_
                 wavelength = float(input("Select a wavelength: "))
             else:
                 wavelength = float(wavelength)
-        concentrations.append(convert_abs_to_concentration(return_absorbance_for_wavelength(data, wavelength), conversion_factor))
+        concentrations.append(convert_abs_to_concentration(return_absorbance_for_wavelength(data, wavelength), conversion_factor, mmol=True))
         sample_labels.append(shorten_filepath(file))
 
     return sample_labels, concentrations
 
 
-def convert_abs_to_concentration(absorbance, conversion_factor) -> float:
-    concentration = absorbance / conversion_factor
+def convert_abs_to_concentration(absorbance, conversion_factor, mmol=False) -> float:
+    if mmol:
+        concentration = absorbance / conversion_factor * 1000
+    else:
+        concentration = absorbance / conversion_factor
     return concentration
 
 
@@ -254,7 +257,15 @@ def main():
     Define processing steps here. See example() for reference.
     :return: None
     """
-    concentration_data = concentrations_from_spec_files(wavelength=258, conversion_factor=298.1477)
+
+    files = select_spectra_files()
+
+    for file in files:
+        plot_full_spectrum(file)
+    plt.legend()
+    plt.show()
+
+    concentration_data = concentrations_from_spec_files(spec_files=files, wavelength=258, conversion_factor=298.1477)
     concentration_data = merge_multiple(concentration_data, erna=-6)
 
     metadata = {
@@ -266,8 +277,8 @@ def main():
         "calibrationExperiment": "HS_T001"
     }
 
-    generate_result_file([concentration_data[0], concentration_data[1]], file="results.json",
-                         filetype="json", metadata=metadata)
+    generate_result_file([concentration_data[0], concentration_data[1]], file="results.csv",
+                         filetype="csv", metadata=metadata)
 
 
 if __name__ == "__main__":
