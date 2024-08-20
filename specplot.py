@@ -1,3 +1,5 @@
+import json
+
 import matplotlib.pyplot as plt
 import numpy as np
 from tkinter import filedialog
@@ -180,6 +182,34 @@ def merge_multiple(data: tuple[list[str], list[float]], erna=-6) -> tuple[list[s
     return merged_titles, mean_tuples
 
 
+def generate_result_file(data: list[list], metadata=None, file=None, filetype="csv"):
+
+    full_string = ""
+
+    result_str = "Sample; Concentration / mol L-1; Std Dev Concentration / mol L-1\n"
+    if filetype == "csv":
+        metadata_json = json.dumps(metadata)
+        for i, line in enumerate(data[0]):
+            result_str += line + "; " + f"{data[1][i][0]:.10f}" + "; " + f"{data[1][i][1]:.10f}" + "\n"
+
+        full_string = "---\n" + metadata_json + "\n---\n" + result_str
+
+    elif filetype == "json":
+        result_dict = {}
+        for i, line in enumerate(data[0]):
+            result_dict[line] = data[1][i]
+
+        full_result = {
+            "metadata": metadata,
+            "samples": result_dict
+        }
+
+        full_string = json.dumps(full_result, indent=4)
+
+    with open(file, "w") as writefile:
+        writefile.write(full_string)
+
+
 def example():
     """
     Demonstration of possible processing using this script. Will only work if example files are accessible.
@@ -224,8 +254,20 @@ def main():
     Define processing steps here. See example() for reference.
     :return: None
     """
-    conc_data = concentrations_from_spec_files(wavelength=258, conversion_factor=298.1477)
-    conc_data = merge_multiple(conc_data, erna=-6)
+    concentration_data = concentrations_from_spec_files(wavelength=258, conversion_factor=298.1477)
+    concentration_data = merge_multiple(concentration_data, erna=-6)
+
+    metadata = {
+        "pointsPerSample": 3,
+        "wavelength_nm": 258,
+        "temperature_C": 25,
+        "parameterFile": "HS_T001.par",
+        "conversionFactor": 298.1477,
+        "calibrationExperiment": "HS_T001"
+    }
+
+    generate_result_file([concentration_data[0], concentration_data[1]], file="results.json",
+                         filetype="json", metadata=metadata)
 
 
 if __name__ == "__main__":
