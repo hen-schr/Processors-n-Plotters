@@ -53,15 +53,23 @@ def read_spectrum(file, try_relative=True) -> (list[float], list[float]):
     return wavelength_lst, absorption_lst
 
 
+def return_absorbance_for_wavelength(spectral_data: tuple[list[float], list[float]], wavelength) -> float:
+    relevant_index = spectral_data[0].index(wavelength)
+    if relevant_index != -1:
+        return spectral_data[1][relevant_index]
+    else:
+        print(f"Could not find absorbance value for lambda = {wavelength} nm")
+        return 0
+
+
 def monochromatic_plot(selected_wavelength, files, concentrations=None, title=None):
     absorptions = []
     if concentrations is None:
         concentrations = []
 
     for file in files:
-        wavelength_lst, absorption_lst = read_spectrum(file)
-        relevant_index = wavelength_lst.index(selected_wavelength)
-        absorptions.append(absorption_lst[relevant_index])
+        spectral_data = read_spectrum(file)
+        absorptions.append(return_absorbance_for_wavelength(spectral_data, selected_wavelength))
         if not concentrations:
             concentrations.append(float(input(f"Specify concentration (mol L-1) for {file}: ")))
 
@@ -98,6 +106,39 @@ def linear_function(x, a):
     return y
 
 
+def select_spectra_files() -> list[str]:
+    files = filedialog.askopenfilenames(title="Select spectra to process",
+                                        filetypes=(("csv files", "*.csv"), ("all files", "*.*")))
+    return files
+
+
+def concentrations_from_spec_files(spec_files=None, wavelength=None, conversion_factor=None,
+                                   calibration_file=None) -> tuple[list[str], list[float]]:
+    if spec_files is None:
+        spec_files = select_spectra_files()
+    concentrations = []
+    sample_labels = []
+    for file in spec_files:
+        data = read_spectrum(file)
+        if wavelength is None:
+            wavelength = input("Select a wavelength: ")
+            if wavelength == "plot":
+                plot_full_spectrum(file, title="Select a wavelength")
+                plt.show()
+                wavelength = float(input("Select a wavelength: "))
+            else:
+                wavelength = float(wavelength)
+        concentrations.append(convert_abs_to_concentration(return_absorbance_for_wavelength(data, wavelength), conversion_factor))
+        sample_labels.append(shorten_filepath(file))
+
+    return sample_labels, concentrations
+
+
+def convert_abs_to_concentration(absorbance, conversion_factor) -> float:
+    concentration = absorbance / conversion_factor
+    return concentration
+
+
 def calculate_r_squared(x_data, y_data, optimized_parameters, function) -> float:
     x_data = np.asarray(x_data)
     y_data = np.asarray(y_data)
@@ -112,6 +153,31 @@ def calculate_r_squared(x_data, y_data, optimized_parameters, function) -> float
 
 def extend_to_current_path(file: str):
     return __file__[:__file__.rfind("\\")] + "\\" + file
+
+
+def shorten_filepath(filepath: str) -> str:
+    short = filepath[filepath.rfind("/") + 1:]
+    return short
+
+
+def merge_multiple(data: tuple[list[str], list[float]], erna=-6) -> tuple[list[str], list[tuple[float, float]]]:
+    merged_titles = []
+    mean_tuples = []
+    for i, datapoint in enumerate(data[0]):
+        if datapoint[:erna] in merged_titles:
+            pass
+        else:
+            values = [data[1][i]]
+            for j, label in enumerate(data[0]):
+                if label[:erna] == datapoint[:erna] and label != datapoint:
+                    values.append(data[1][j])
+            mean = np.mean(values)
+            std = np.std(values)
+            merged_titles.append(datapoint[:erna])
+            mean_tuples.append((mean, std))
+            print(f"{merged_titles[-1]}: {mean}, {std} ({len(values)} pts.)")
+
+    return merged_titles, mean_tuples
 
 
 def example():
@@ -158,7 +224,8 @@ def main():
     Define processing steps here. See example() for reference.
     :return: None
     """
-    pass
+    conc_data = concentrations_from_spec_files(wavelength=258, conversion_factor=298.1477)
+    conc_data = merge_multiple(conc_data, erna=-6)
 
 
 if __name__ == "__main__":
