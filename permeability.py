@@ -3,6 +3,7 @@ from datetime import datetime
 import scipy.optimize as opt
 import numpy as np
 import json
+from tkinter import filedialog
 
 
 def exp_function(x, a, b, c, d):
@@ -40,7 +41,7 @@ def read_json_file(file_path):
         print(f"An error occurred: {e}")
 
 
-def filter_data(x, y, smooth_factor=25, threshold=0.03):
+def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_percentage=.8, _iteration=1, max_iterations=25):
     if smooth_factor >= 3:
         smooth_y = np.convolve(y, np.ones(smooth_factor)/smooth_factor, "full")
     else:
@@ -49,11 +50,16 @@ def filter_data(x, y, smooth_factor=25, threshold=0.03):
     new_x, new_y = ([], [])
     
     for i, value in enumerate(y):
-        if abs(value - smooth_y[i]) / value <= threshold:
+        if abs(value - smooth_y[i]) / value <= threshold and value >= 0:
             new_x.append(x[i])
             new_y.append(value)
 
     percentage_datapoints_preserved = len(new_x) / len(x)
+
+    if percentage_datapoints_preserved < min_percentage and optimize and _iteration <= max_iterations:
+        print(f"Optimizing... Iteration {_iteration}")
+        new_x, new_y, percentage_datapoints_preserved = filter_data(x, y, threshold=threshold+0.005, optimize=True,
+                                                                    _iteration=_iteration + 1)
 
     return new_x, new_y, percentage_datapoints_preserved
     
@@ -153,6 +159,8 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
     start = 0
     end = -1
 
+    average_last_min = np.mean(permeate_flow_mlmin[-120:])
+
     for t in relative_time:
         if t >= optimization_start:
             start = relative_time.index(t)
@@ -188,6 +196,7 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
                 ax.text(0.01, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
                 ax.text(0.01, 0.90, f"pred. $F_V$ = {round(optimized_parameters[2], 2)} mL / min", transform=ax.transAxes)
                 ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
+                ax.text(0.01, 0.80, "$\\bar{F_V}$ = " + f" = {round(average_last_min, 2)} mL / min", transform=ax.transAxes)
 
             if show_equilibrium_value:
                 ax.vlines(equilibrium_time, 0, 10, linestyles="dotted")
@@ -196,7 +205,8 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
         results = {
             "permeateFluxStabilized": optimized_parameters[2],
             "rSquared": round(r_squared, 4),
-            "stabilizationTimeMin": equilibrium_time
+            "stabilizationTimeMin": equilibrium_time,
+            "finalPermeateFlux": average_last_min
         }
         
     except RuntimeError:
@@ -207,6 +217,12 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
         ax.vlines(relative_time[end], 0, 10, linestyles="dotted", color="#fa8174")
 
     return results
+
+
+def select_data_files() -> list[str]:
+    files = filedialog.askopenfilenames(title="Select data to process",
+                                        filetypes=(("text files", "*.txt"), ("all files", "*.*")))
+    return files
 
 
 def analyze_post_processing_parameters(data, fit_parameters, smooth_factors=None, thresholds=None):
@@ -313,18 +329,25 @@ def analyze_post_processing_results(smooth_factors, thresholds, results, r_min=.
 def main():
     # plt.style.use("dark_background")
 
-    # fig, ax = plt.subplots(1)
-
     param_dict = read_json_file("Parameters/permeability.json")
 
-    data_file = "Examples/HS_F024_2.txt"
+    data_files = select_data_files()
 
-    data = read_data_file(data_file)
+    for datafile in data_files:
+        data = read_data_file(datafile)
 
-    plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400])
-    plt.show()
+        result_1 = plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400], display_info=False)
 
-    analyze_post_processing_parameters(data, param_dict)
+        data = filter_data(data[0], data[3], threshold=0.1, smooth_factor=40, optimize=True)
+
+        print(data[2])
+
+        result_2 = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], display_info=False)
+
+        print(result_1)
+        print(result_2)
+
+        plt.show()
 
 
 if __name__ == "__main__":
