@@ -170,39 +170,30 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
 
     relative_time, permeate_flow_mlmin = data
 
-    optimization_start = parameters["fit_start"]
-    optimization_end = parameters["fit_end"]
-    
-    start = 0
-    end = -1
-
     average_last_min = np.mean(permeate_flow_mlmin[-120:])
 
-    for t in relative_time:
-        if t >= optimization_start:
-            start = relative_time.index(t)
-            break
-    for t in relative_time:
-        if t >= optimization_end:
-            end = relative_time.index(t)
-            break
+    optimization_start = parameters["fit_start"]
+    optimization_end = parameters["fit_end"]
+
+    end, start = _identify_fit_limits(optimization_end, optimization_start, relative_time)
 
     if plot:
         ax.plot(relative_time, permeate_flow_mlmin, style_raw, color=color_raw, label=data_name)
     
     try:
-        
+
+        # noinspection PyTupleAssignmentBalance
         optimized_parameters, pcov = opt.curve_fit(exp_function, relative_time[start:end], permeate_flow_mlmin[start:end],
                                                    bounds=fit_bounds)
         resolved_x = np.linspace(optimization_start, optimization_end + 30, 100)
 
         r_squared = calculate_r_squared(relative_time[start:end], permeate_flow_mlmin[start:end],
                                         optimized_parameters, exp_function)
-    
+
         equilibrium_time = (- np.log((- 0.01 * optimized_parameters[2]) / optimized_parameters[0]) +
                             optimized_parameters[3]) / optimized_parameters[1]
         equilibrium_time = round(equilibrium_time, 0)
-        
+
         if plot:
             ax.plot(resolved_x, exp_function(np.asarray(resolved_x), *optimized_parameters),
                     style_fit, color=color_fit, label=f"fit for {data_name}" if data_name is not None else None)
@@ -234,6 +225,20 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
         ax.vlines(relative_time[end], 0, 10, linestyles="dotted", color="#fa8174")
 
     return results
+
+
+def _identify_fit_limits(optimization_end, optimization_start, relative_time):
+    start = 0
+    end = -1
+    for t in relative_time:
+        if t >= optimization_start:
+            start = relative_time.index(t)
+            break
+    for t in relative_time:
+        if t >= optimization_end:
+            end = relative_time.index(t)
+            break
+    return end, start
 
 
 def select_data_files() -> list[str]:
@@ -356,27 +361,31 @@ def main():
         param_dict = read_json_file("Parameters/permeability.json")
 
         for datafile in data_files:
+
+            fig, (ax_raw, ax_processed) = plt.subplots(2)
+
             data = read_data_file(datafile)
 
             # filter_parameter_analysis(data, param_dict)
 
+            unfiltered_result_dict = plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400], ax=ax_raw)
+
+            unfiltered_result_dict["fit_parameters"] = param_dict
+            unfiltered_result_dict["data_file"] = datafile
+
             data = filter_data(data[0], data[3], threshold=0.2, smooth_factor=25, optimize=False)
 
-            result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], display_info=False)
+            result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed)
 
             result_dict["filter_parameters"] = data[2]
 
-            result_dict["fit_parameters"] = param_dict
-
-            result_dict["data_file"] = datafile
-
-            print(result_dict)
+            unfiltered_result_dict["filtered_results"] = result_dict
             plt.show()
 
             write_file = input(f"Save results of {datafile} (y/n/q)? ")
 
             if write_file == "y":
-                write_json_file(result_dict, initialfile=shorten_filepath(datafile))
+                write_json_file(unfiltered_result_dict, initialfile=shorten_filepath(datafile))
                 main_loop = False
             elif write_file == "q":
                 main_loop = False
