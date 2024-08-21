@@ -4,7 +4,7 @@ import scipy.optimize as opt
 import numpy as np
 import json
 from tkinter import filedialog
-from typing import Union
+from typing import Union, Tuple, Literal
 
 
 def exp_function(x, a, b, c, d):
@@ -120,16 +120,11 @@ def filter_data(x: list[Union[float, int]], y: list[Union[float, int]], smooth_f
         filter_parameters["optimization_iterations"] = _iteration
 
     if smooth_factor >= 3:
-        smooth_y = np.convolve(y, np.ones(smooth_factor)/smooth_factor, "full")
+        smooth_y = smooth_curve(x, y, smooth_factor, plot=False)
     else:
         smooth_y = y
-    
-    filtered_x, filtered_y = ([], [])
-    
-    for i, value in enumerate(y):
-        if abs(value - smooth_y[i]) / value <= threshold and value >= 0:
-            filtered_x.append(x[i])
-            filtered_y.append(value)
+
+    filtered_x, filtered_y = _remove_points_by_threshold(smooth_y, threshold, x, y)
 
     percentage_datapoints_preserved = len(filtered_x) / len(x)
 
@@ -137,16 +132,26 @@ def filter_data(x: list[Union[float, int]], y: list[Union[float, int]], smooth_f
 
     if percentage_datapoints_preserved < min_pts_preserved and optimize_threshold and _iteration <= max_iterations:
         print(f"Optimizing... Iteration {_iteration}")
-        filtered_x, filtered_y, filter_parameters = filter_data(x, y, threshold=threshold+0.005, optimize_threshold=True,
-                                                      _iteration=_iteration + 1)
-        percentage_datapoints_preserved = filter_parameters["pts_preserved"]
+        filtered_x, filtered_y, filter_parameters = filter_data(x, y, threshold=threshold+0.005,
+                                                                optimize_threshold=True, _iteration=_iteration + 1)
     elif _iteration >= max_iterations:
         print(f"Maximum iterations reached, aborting optimization of threshold at {round(threshold, 3)}")
 
     return filtered_x, filtered_y, filter_parameters
 
 
+def _remove_points_by_threshold(reference_y, threshold, x, y):
+    filtered_x, filtered_y = ([], [])
+    for i, y_i in enumerate(y):
+        if abs(y_i - reference_y[i]) / y_i <= threshold and y_i >= 0:
+            filtered_x.append(x[i])
+            filtered_y.append(y_i)
+
+    return filtered_x, filtered_y
+
+
 def smooth_curve(x, y, smoothing_factor, plot=True, ax: plt.Axes = None, mode="full", label="moving average"):
+    # noinspection PyTypeChecker
     moving_average = np.convolve(y, np.ones(smoothing_factor) / smoothing_factor, mode)
 
     label += f" (over {smoothing_factor} points)"
@@ -243,7 +248,7 @@ def _identify_fit_interval(optimization_end, optimization_start, relative_time):
     return end, start
 
 
-def select_data_files() -> list[str]:
+def select_data_files() -> Union[Literal[""], tuple[str, ...]]:
     files = filedialog.askopenfilenames(title="Select data to process",
                                         filetypes=(("text files", "*.txt"), ("all files", "*.*")))
     return files
