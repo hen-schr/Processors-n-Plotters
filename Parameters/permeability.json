@@ -1,5 +1,6 @@
 {
 	"fit_start": 0,
-	"fit_end": 300,
-	"smoothing":  25
+	"fit_end": 400,
+	"threshold": 0.1,
+	"smooth_factor": 25
 }

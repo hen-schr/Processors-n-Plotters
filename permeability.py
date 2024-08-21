@@ -41,30 +41,14 @@ def read_json_file(file_path):
         print(f"An error occurred: {e}")
 
 
-def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_percentage=.8,
-                _iteration=1, max_iterations=100):
-    if smooth_factor >= 3:
-        smooth_y = np.convolve(y, np.ones(smooth_factor)/smooth_factor, "full")
-    else:
-        smooth_y = y
-    
-    new_x, new_y = ([], [])
-    
-    for i, value in enumerate(y):
-        if abs(value - smooth_y[i]) / value <= threshold and value >= 0:
-            new_x.append(x[i])
-            new_y.append(value)
+def write_json_file(data: dict, file_path=None):
+    if file_path is None:
+        file_path = filedialog.asksaveasfile(mode="w", defaultextension=".json", filetypes=[("json file", "*.json")])
 
-    percentage_datapoints_preserved = len(new_x) / len(x)
+    json_str = json.dumps(data, indent=4)
 
-    if percentage_datapoints_preserved < min_percentage and optimize and _iteration <= max_iterations:
-        print(f"Optimizing... Iteration {_iteration}")
-        new_x, new_y, percentage_datapoints_preserved = filter_data(x, y, threshold=threshold+0.005, optimize=True,
-                                                                    _iteration=_iteration + 1)
-    elif _iteration >= max_iterations:
-        print(f"Maximum iterations reached, aborting optimization of threshold at {round(threshold, 3)}")
-
-    return new_x, new_y, percentage_datapoints_preserved
+    file_path.write(json_str)
+    file_path.close()
 
 
 def read_data_file(file, return_relative_time=True, start_time=None):
@@ -110,6 +94,46 @@ def read_data_file(file, return_relative_time=True, start_time=None):
         return relative_time, mass, pump_flow, permeate_flow_mlmin
     else:
         return exp_time, mass, pump_flow, permeate_flow_mlmin
+
+
+def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_percentage=.8,
+                _iteration=1, max_iterations=100):
+
+    filter_parameters = {
+        "threshold": threshold,
+        "smooth_factor": smooth_factor,
+        "optimize_threshold": optimize
+    }
+
+    if optimize:
+        filter_parameters["minimum_pts_preserved"] = min_percentage
+        filter_parameters["optimization_iterations"] = _iteration
+
+    if smooth_factor >= 3:
+        smooth_y = np.convolve(y, np.ones(smooth_factor)/smooth_factor, "full")
+    else:
+        smooth_y = y
+    
+    new_x, new_y = ([], [])
+    
+    for i, value in enumerate(y):
+        if abs(value - smooth_y[i]) / value <= threshold and value >= 0:
+            new_x.append(x[i])
+            new_y.append(value)
+
+    percentage_datapoints_preserved = len(new_x) / len(x)
+
+    filter_parameters["pts_preserved"] = percentage_datapoints_preserved
+
+    if percentage_datapoints_preserved < min_percentage and optimize and _iteration <= max_iterations:
+        print(f"Optimizing... Iteration {_iteration}")
+        new_x, new_y, filter_parameters = filter_data(x, y, threshold=threshold+0.005, optimize=True,
+                                                                    _iteration=_iteration + 1)
+        percentage_datapoints_preserved = filter_parameters["pts_preserved"]
+    elif _iteration >= max_iterations:
+        print(f"Maximum iterations reached, aborting optimization of threshold at {round(threshold, 3)}")
+
+    return new_x, new_y, filter_parameters
 
 
 def smooth_curve(x, y, smoothing_factor, plot=True, widget=None, mode="full", label="moving average"):
@@ -326,16 +350,15 @@ def main():
 
         # filter_parameter_analysis(data, param_dict)
 
-        result_1 = plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400], display_info=False)
-
         data = filter_data(data[0], data[3], threshold=0.1, smooth_factor=25, optimize=True)
 
-        print(data[2])
+        result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], display_info=False)
 
-        result_2 = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], display_info=False)
+        result_dict["filter_parameters"] = data[2]
 
-        print(result_1)
-        print(result_2)
+        result_dict["fit_parameters"] = param_dict
+
+        write_json_file(result_dict)
 
         plt.show()
 
