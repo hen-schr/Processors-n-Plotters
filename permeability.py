@@ -4,6 +4,7 @@ import scipy.optimize as opt
 import numpy as np
 import json
 from tkinter import filedialog
+from typing import Union
 
 
 def exp_function(x, a, b, c, d):
@@ -104,17 +105,18 @@ def read_data_file(file, return_relative_time=True, start_time=None):
         return exp_time, mass, pump_flow, permeate_flow_mlmin
 
 
-def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_percentage=.8,
-                _iteration=1, max_iterations=100):
+def filter_data(x: list[Union[float, int]], y: list[Union[float, int]], smooth_factor: int = 25,
+                threshold: float = 0.03, optimize_threshold: bool = False, min_pts_preserved: float = .8,
+                max_iterations: int = 100, _iteration: int = 1):
 
     filter_parameters = {
         "threshold": threshold,
         "smooth_factor": smooth_factor,
-        "optimize_threshold": optimize
+        "optimize_threshold": optimize_threshold
     }
 
-    if optimize:
-        filter_parameters["minimum_pts_preserved"] = min_percentage
+    if optimize_threshold:
+        filter_parameters["minimum_pts_preserved"] = min_pts_preserved
         filter_parameters["optimization_iterations"] = _iteration
 
     if smooth_factor >= 3:
@@ -122,38 +124,38 @@ def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_perc
     else:
         smooth_y = y
     
-    new_x, new_y = ([], [])
+    filtered_x, filtered_y = ([], [])
     
     for i, value in enumerate(y):
         if abs(value - smooth_y[i]) / value <= threshold and value >= 0:
-            new_x.append(x[i])
-            new_y.append(value)
+            filtered_x.append(x[i])
+            filtered_y.append(value)
 
-    percentage_datapoints_preserved = len(new_x) / len(x)
+    percentage_datapoints_preserved = len(filtered_x) / len(x)
 
     filter_parameters["pts_preserved"] = percentage_datapoints_preserved
 
-    if percentage_datapoints_preserved < min_percentage and optimize and _iteration <= max_iterations:
+    if percentage_datapoints_preserved < min_pts_preserved and optimize_threshold and _iteration <= max_iterations:
         print(f"Optimizing... Iteration {_iteration}")
-        new_x, new_y, filter_parameters = filter_data(x, y, threshold=threshold+0.005, optimize=True,
-                                                                    _iteration=_iteration + 1)
+        filtered_x, filtered_y, filter_parameters = filter_data(x, y, threshold=threshold+0.005, optimize_threshold=True,
+                                                      _iteration=_iteration + 1)
         percentage_datapoints_preserved = filter_parameters["pts_preserved"]
     elif _iteration >= max_iterations:
         print(f"Maximum iterations reached, aborting optimization of threshold at {round(threshold, 3)}")
 
-    return new_x, new_y, filter_parameters
+    return filtered_x, filtered_y, filter_parameters
 
 
-def smooth_curve(x, y, smoothing_factor, plot=True, widget=None, mode="full", label="moving average"):
+def smooth_curve(x, y, smoothing_factor, plot=True, ax: plt.Axes = None, mode="full", label="moving average"):
     moving_average = np.convolve(y, np.ones(smoothing_factor) / smoothing_factor, mode)
 
     label += f" (over {smoothing_factor} points)"
 
-    if plot and widget is not None:
-        widget.plot(x, y, label=label)
-    elif plot and widget is None:
-        widget = plt.gca()
-        widget.plot(x, y, label=label)
+    if plot and ax is not None:
+        ax.plot(x, y, label=label)
+    elif plot and ax is None:
+        ax = plt.gca()
+        ax.plot(x, y, label=label)
 
     return moving_average
 
@@ -174,7 +176,7 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
     optimization_start = parameters["fit_start"]
     optimization_end = parameters["fit_end"]
 
-    end, start = _identify_fit_limits(optimization_end, optimization_start, relative_time)
+    end, start = _identify_fit_interval(optimization_end, optimization_start, relative_time)
 
     if plot:
         ax.plot(relative_time, permeate_flow_mlmin, style_raw, color=color_raw, label=data_name)
@@ -227,7 +229,7 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
     return results
 
 
-def _identify_fit_limits(optimization_end, optimization_start, relative_time):
+def _identify_fit_interval(optimization_end, optimization_start, relative_time):
     start = 0
     end = -1
     for t in relative_time:
@@ -373,7 +375,7 @@ def main():
             unfiltered_result_dict["fit_parameters"] = param_dict
             unfiltered_result_dict["data_file"] = datafile
 
-            data = filter_data(data[0], data[3], threshold=0.2, smooth_factor=25, optimize=False)
+            data = filter_data(data[0], data[3], threshold=0.2, smooth_factor=25, optimize_threshold=False)
 
             result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed)
 
