@@ -210,7 +210,7 @@ def select_data_files() -> list[str]:
     return files
 
 
-def analyze_post_processing_parameters(data, fit_parameters, smooth_factors=None, thresholds=None):
+def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresholds=None):
     if smooth_factors is None:
         smooth_factors = [0, 3, 6, 9, 12, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     if thresholds is None:
@@ -267,29 +267,21 @@ def analyze_post_processing_parameters(data, fit_parameters, smooth_factors=None
     ax.legend()
     plt.show()
 
-    analyze_post_processing_results(used_smoothing_factors, used_thresholds, results)
+    _summarize_filter_analysis(used_smoothing_factors, used_thresholds, results)
 
-    param_plot_3d(used_smoothing_factors, used_thresholds, results[0],
-                  "Stablized Permeate Flux (calculated) / $mL \; min^{-1}$")
-    param_plot_3d(used_smoothing_factors, used_thresholds, results[1], "Stablization Time (calc.) / min")
-    param_plot_3d(used_smoothing_factors, used_thresholds, results[2], "$R^2$ / -")
-    param_plot_3d(used_smoothing_factors, used_thresholds, results[3], "Pts Preserved / -")
+    plot_3d(used_smoothing_factors, used_thresholds, results[0],
+                  "Stablized Permeate Flux (calculated) / $mL \\; min^{-1}$")
+    plot_3d(used_smoothing_factors, used_thresholds, results[1],
+            title_x="Filter threshold", title_y="Smoothing factor", title_z="Stablization Time (calc.) / min")
+    plot_3d(used_smoothing_factors, used_thresholds, results[2],
+            title_x="Filter threshold", title_y="Smoothing factor", title_z="$R^2$ / -")
+    plot_3d(used_smoothing_factors, used_thresholds, results[3],
+            title_x="Filter threshold", title_y="Smoothing factor", title_z="Pts Preserved / -")
 
     plt.show()
 
 
-def param_plot_3d(smooth_factors, thresholds, z_values, z_label=None):
-    fig = plt.figure()
-    ax = fig.add_subplot(projection="3d")
-
-    ax.scatter(y, x, z)
-
-    ax.set_xlabel('Filter threshold')
-    ax.set_ylabel('Smoothing factor')
-    ax.set_zlabel(title_z)
-
-
-def analyze_post_processing_results(smooth_factors, thresholds, results, r_min=.9, pts_min=.7):
+def _summarize_filter_analysis(smooth_factors, thresholds, results, r_min=.9, pts_min=.8):
     r_max_index = results[2].index(max(results[2]))
     print(f"best R2 ({results[2][r_max_index]}): s = {smooth_factors[r_max_index]}, t = {thresholds[r_max_index]}")
 
@@ -307,8 +299,19 @@ def analyze_post_processing_results(smooth_factors, thresholds, results, r_min=.
     mean_permeate_flux = (np.mean(results[0]), np.std(results[0]))
     mean_stabilization_time = (np.mean(results[1]), np.std(results[1]))
 
-    print(mean_stabilization_time)
-    print(mean_permeate_flux)
+    print(f"Mean stablization time: {mean_stabilization_time} min")
+    print(f"Mean stablized permeate flux: {mean_permeate_flux} mL/min")
+
+
+def plot_3d(x, y, z, title_x=None, title_y=None, title_z=None):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection="3d")
+
+    ax.scatter(y, x, z)
+
+    ax.set_xlabel(title_x)
+    ax.set_ylabel(title_y)
+    ax.set_zlabel(title_z)
 
 
 def main():
@@ -321,7 +324,7 @@ def main():
     for datafile in data_files:
         data = read_data_file(datafile)
 
-        # analyze_post_processing_parameters(data, param_dict)
+        # filter_parameter_analysis(data, param_dict)
 
         result_1 = plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400], display_info=False)
 
