@@ -11,9 +11,9 @@ def exp_function(x, a, b, c, d):
     y = c - a * np.exp(-x * b + d)
     return y
 
-  
+
 def linear_function(x, a, b):
-    y = a*x + b
+    y = a * x + b
     return y
 
 
@@ -21,8 +21,8 @@ def calculate_r_squared(x_data, y_data, optimized_parameters, function) -> float
     x_data = np.asarray(x_data)
     y_data = np.asarray(y_data)
     residuals = y_data - function(x_data, *optimized_parameters)
-    ss_residuals = np.sum(residuals**2)
-    ss_total = np.sum((y_data-np.mean(y_data))**2)
+    ss_residuals = np.sum(residuals ** 2)
+    ss_total = np.sum((y_data - np.mean(y_data)) ** 2)
 
     r_squared = 1 - (ss_residuals / ss_total)
 
@@ -36,7 +36,7 @@ def shorten_filepath(filepath: str, remove_extension=True) -> str:
     return short
 
 
-def read_json_file(file_path):
+def read_json_file(file_path: str) -> None:
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             data = json.load(file)
@@ -49,18 +49,25 @@ def read_json_file(file_path):
         print(f"An error occurred: {e}")
 
 
-def write_json_file(data: dict, file_path=None, initialfile=None):
+def write_json_file(data: dict, file_path: str = None, filename_suggestion: str = None, compact_json: bool = False
+                    ) -> None:
+    json_str = json.dumps(data, indent=0 if compact_json else 4)
+
     if file_path is None:
         file_path = filedialog.asksaveasfile(mode="w", defaultextension=".json",
-                                             filetypes=[("json file", "*.json")], initialfile=initialfile)
+                                             filetypes=[("json file", "*.json")], initialfile=filename_suggestion)
+        file_path.write(json_str)
+        file_path.close()
+    else:
+        with open(file_path, "w") as writefile:
+            writefile.write(json_str)
 
-    json_str = json.dumps(data, indent=4)
 
-    file_path.write(json_str)
-    file_path.close()
-
-
-def read_data_file(file, return_relative_time=True, start_time=None):
+def read_data_file(file: str = None, return_relative_time: bool = True, start_time: str = None
+                   ) -> tuple[any, any, any, any]:
+    if file is None:
+        file = filedialog.askopenfilename(title="Select data to process",
+                                          filetypes=(("text files", "*.txt"), ("all files", "*.*")))
 
     with open(file) as readfile:
         data = readfile.read()
@@ -107,8 +114,8 @@ def read_data_file(file, return_relative_time=True, start_time=None):
 
 def filter_data(x: list[Union[float, int]], y: list[Union[float, int]], smooth_factor: int = 25,
                 threshold: float = 0.03, optimize_threshold: bool = False, min_pts_preserved: float = .8,
-                max_iterations: int = 100, _iteration: int = 1):
-
+                max_iterations: int = 100, _iteration: int = 1
+                ) -> tuple[list[Union[int, float]], list[Union[int, float]], dict]:
     filter_parameters = {
         "threshold": threshold,
         "smooth_factor": smooth_factor,
@@ -124,7 +131,7 @@ def filter_data(x: list[Union[float, int]], y: list[Union[float, int]], smooth_f
     else:
         smooth_y = y
 
-    filtered_x, filtered_y = _remove_points_by_threshold(smooth_y, threshold, x, y)
+    filtered_x, filtered_y = _bandpass_filter(smooth_y, threshold, x, y)
 
     percentage_datapoints_preserved = len(filtered_x) / len(x)
 
@@ -132,7 +139,7 @@ def filter_data(x: list[Union[float, int]], y: list[Union[float, int]], smooth_f
 
     if percentage_datapoints_preserved < min_pts_preserved and optimize_threshold and _iteration <= max_iterations:
         print(f"Optimizing... Iteration {_iteration}")
-        filtered_x, filtered_y, filter_parameters = filter_data(x, y, threshold=threshold+0.005,
+        filtered_x, filtered_y, filter_parameters = filter_data(x, y, threshold=threshold + 0.005,
                                                                 optimize_threshold=True, _iteration=_iteration + 1)
     elif _iteration >= max_iterations:
         print(f"Maximum iterations reached, aborting optimization of threshold at {round(threshold, 3)}")
@@ -140,7 +147,9 @@ def filter_data(x: list[Union[float, int]], y: list[Union[float, int]], smooth_f
     return filtered_x, filtered_y, filter_parameters
 
 
-def _remove_points_by_threshold(reference_y, threshold, x, y):
+def _bandpass_filter(x: list[Union[float, int]], y: list[Union[float, int]],
+                     reference_y: list[Union[float, int]], threshold: Union[float, int]
+                     ) -> tuple[list[Union[int, float]], list[Union[int, float]]]:
     filtered_x, filtered_y = ([], [])
     for i, y_i in enumerate(y):
         if abs(y_i - reference_y[i]) / y_i <= threshold and y_i >= 0:
@@ -150,7 +159,9 @@ def _remove_points_by_threshold(reference_y, threshold, x, y):
     return filtered_x, filtered_y
 
 
-def smooth_curve(x, y, smoothing_factor, plot=True, ax: plt.Axes = None, mode="full", label="moving average"):
+def smooth_curve(x: list[Union[float, int]], y: list[Union[float, int]], smoothing_factor: int, plot: bool = True,
+                 ax: plt.Axes = None, mode: Literal["valid", "same", "full"] = "full", label: str = "moving average"
+                 ) -> np.ndarray:
     # noinspection PyTypeChecker
     moving_average = np.convolve(y, np.ones(smoothing_factor) / smoothing_factor, mode)
 
@@ -169,8 +180,7 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
                      ax: plt.Axes = None, plot_title: str = "Permeate Flux", data_name: str = None,
                      style_raw: str = "o", color_raw=None, style_fit: str = "-", color_fit=None,
                      plot_fit_interval: bool = True, plot_equilibrium_value: bool = True,
-                     display_results_in_plot: bool = True):
-
+                     display_results_in_plot: bool = True) -> dict:
     if ax is None and plot:
         ax = plt.gca()
 
@@ -185,11 +195,12 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
 
     if plot:
         ax.plot(relative_time, permeate_flow_mlmin, style_raw, color=color_raw, label=data_name)
-    
+
     try:
 
         # noinspection PyTupleAssignmentBalance
-        optimized_parameters, pcov = opt.curve_fit(exp_function, relative_time[start:end], permeate_flow_mlmin[start:end],
+        optimized_parameters, pcov = opt.curve_fit(exp_function, relative_time[start:end],
+                                                   permeate_flow_mlmin[start:end],
                                                    bounds=fit_bounds)
         resolved_x = np.linspace(optimization_start, optimization_end + 30, 100)
 
@@ -208,9 +219,11 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
 
             if display_results_in_plot:
                 ax.text(0.01, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
-                ax.text(0.01, 0.90, f"pred. $F_V$ = {round(optimized_parameters[2], 2)} mL / min", transform=ax.transAxes)
+                ax.text(0.01, 0.90, f"pred. $F_V$ = {round(optimized_parameters[2], 2)} mL / min",
+                        transform=ax.transAxes)
                 ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
-                ax.text(0.01, 0.80, "$\\bar{F_V}$ = " + f" = {round(average_last_min, 2)} mL / min", transform=ax.transAxes)
+                ax.text(0.01, 0.80, "$\\bar{F_V}$ = " + f" = {round(average_last_min, 2)} mL / min",
+                        transform=ax.transAxes)
 
             if plot_equilibrium_value:
                 ax.vlines(equilibrium_time, 0, 10, linestyles="dotted")
@@ -222,7 +235,7 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
             "stabilizationTimeMin": equilibrium_time,
             "finalPermeateFlux": average_last_min
         }
-        
+
     except RuntimeError:
         print("Could not fit to function using the given data! You might try to filter the data before analysis.")
         results = {}
@@ -234,7 +247,8 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
     return results
 
 
-def _identify_fit_interval(optimization_end, optimization_start, relative_time):
+def _identify_fit_interval(optimization_end: Union[int, float], optimization_start: Union[int, float],
+                           relative_time: list[Union[int, float]]) -> tuple[int, int]:
     start = 0
     end = -1
     for t in relative_time:
@@ -254,7 +268,7 @@ def select_data_files() -> Union[Literal[""], tuple[str, ...]]:
     return files
 
 
-def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresholds=None):
+def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresholds=None) -> None:
     if smooth_factors is None:
         smooth_factors = [0, 3, 6, 9, 12, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     if thresholds is None:
@@ -314,7 +328,7 @@ def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresho
     _summarize_filter_analysis(used_smoothing_factors, used_thresholds, results)
 
     plot_3d(used_smoothing_factors, used_thresholds, results[0],
-                  "Stablized Permeate Flux (calculated) / $mL \\; min^{-1}$")
+            "Stablized Permeate Flux (calculated) / $mL \\; min^{-1}$")
     plot_3d(used_smoothing_factors, used_thresholds, results[1],
             title_x="Filter threshold", title_y="Smoothing factor", title_z="Stablization Time (calc.) / min")
     plot_3d(used_smoothing_factors, used_thresholds, results[2],
@@ -325,7 +339,8 @@ def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresho
     plt.show()
 
 
-def _summarize_filter_analysis(smooth_factors, thresholds, results, r_min=.9, pts_min=.8):
+def _summarize_filter_analysis(smooth_factors: list[int], thresholds: list[float], results: dict, r_min: float = .9,
+                               pts_min: float = .8) -> None:
     r_max_index = results[2].index(max(results[2]))
     print(f"best R2 ({results[2][r_max_index]}): s = {smooth_factors[r_max_index]}, t = {thresholds[r_max_index]}")
 
@@ -347,7 +362,8 @@ def _summarize_filter_analysis(smooth_factors, thresholds, results, r_min=.9, pt
     print(f"Mean stablized permeate flux: {mean_permeate_flux} mL/min")
 
 
-def plot_3d(x, y, z, title_x=None, title_y=None, title_z=None):
+def plot_3d(x: list[Union[int, float]], y: list[Union[int, float]], z: list[Union[int, float]],
+            title_x: str = None, title_y: str = None, title_z: str = None) -> None:
     fig = plt.figure()
     ax = fig.add_subplot(projection="3d")
 
@@ -392,7 +408,7 @@ def main():
             write_file = input(f"Save results of {datafile} (y/n/q)? ")
 
             if write_file == "y":
-                write_json_file(unfiltered_result_dict, initialfile=shorten_filepath(datafile))
+                write_json_file(unfiltered_result_dict, filename_suggestion=shorten_filepath(datafile))
                 main_loop = False
             elif write_file == "q":
                 main_loop = False
