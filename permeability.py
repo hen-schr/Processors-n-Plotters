@@ -41,7 +41,8 @@ def read_json_file(file_path):
         print(f"An error occurred: {e}")
 
 
-def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_percentage=.8, _iteration=1, max_iterations=25):
+def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_percentage=.8,
+                _iteration=1, max_iterations=100):
     if smooth_factor >= 3:
         smooth_y = np.convolve(y, np.ones(smooth_factor)/smooth_factor, "full")
     else:
@@ -60,6 +61,8 @@ def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_perc
         print(f"Optimizing... Iteration {_iteration}")
         new_x, new_y, percentage_datapoints_preserved = filter_data(x, y, threshold=threshold+0.005, optimize=True,
                                                                     _iteration=_iteration + 1)
+    elif _iteration >= max_iterations:
+        print(f"Maximum iterations reached, aborting optimization of threshold at {round(threshold, 3)}")
 
     return new_x, new_y, percentage_datapoints_preserved
     
@@ -336,9 +339,11 @@ def main():
     for datafile in data_files:
         data = read_data_file(datafile)
 
+        # analyze_post_processing_parameters(data, param_dict)
+
         result_1 = plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400], display_info=False)
 
-        data = filter_data(data[0], data[3], threshold=0.1, smooth_factor=40, optimize=True)
+        data = filter_data(data[0], data[3], threshold=0.1, smooth_factor=25, optimize=True)
 
         print(data[2])
 
