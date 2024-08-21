@@ -65,24 +65,6 @@ def filter_data(x, y, smooth_factor=25, threshold=0.03, optimize=False, min_perc
         print(f"Maximum iterations reached, aborting optimization of threshold at {round(threshold, 3)}")
 
     return new_x, new_y, percentage_datapoints_preserved
-    
-
-def process_data_t(x, y):
-    new_x, new_y = ([], [])
-    
-    optimized_parameters, pcov = opt.curve_fit(exp_function, x, y, bounds=[-150, 150])
-    
-    fitted_y = exp_function(np.asarray(x), *optimized_parameters)
-    
-    for i, value in enumerate(y):
-        if abs(value - fitted_y[i]) / optimized_parameters[2] <= 0.2:
-            new_x.append(x[i])
-            new_y.append(value)
-    
-    print(f"""Filtered out {len(x) - len(new_x)} from {len(x)} overall datapoints 
-    ({round((len(x) - len(new_x)) / len(x) * 100, 2)} %).""")
-    
-    return new_x, new_y
 
 
 def read_data_file(file, return_relative_time=True, start_time=None):
@@ -300,11 +282,11 @@ def param_plot_3d(smooth_factors, thresholds, z_values, z_label=None):
     fig = plt.figure()
     ax = fig.add_subplot(projection="3d")
 
-    ax.scatter(thresholds, smooth_factors, z_values)
+    ax.scatter(y, x, z)
 
     ax.set_xlabel('Filter threshold')
     ax.set_ylabel('Smoothing factor')
-    ax.set_zlabel(z_label)
+    ax.set_zlabel(title_z)
 
 
 def analyze_post_processing_results(smooth_factors, thresholds, results, r_min=.9, pts_min=.7):
