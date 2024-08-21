@@ -9,7 +9,7 @@ from tkinter import filedialog
 def exp_function(x, a, b, c, d):
     y = c - a * np.exp(-x * b + d)
     return y
-  
+
   
 def linear_function(x, a, b):
     y = a*x + b
@@ -28,6 +28,13 @@ def calculate_r_squared(x_data, y_data, optimized_parameters, function) -> float
     return r_squared
 
 
+def shorten_filepath(filepath: str, remove_extension=True) -> str:
+    short = filepath[filepath.rfind("/") + 1:]
+    if remove_extension:
+        short = short[:short.rfind(".")]
+    return short
+
+
 def read_json_file(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
@@ -41,9 +48,10 @@ def read_json_file(file_path):
         print(f"An error occurred: {e}")
 
 
-def write_json_file(data: dict, file_path=None):
+def write_json_file(data: dict, file_path=None, initialfile=None):
     if file_path is None:
-        file_path = filedialog.asksaveasfile(mode="w", defaultextension=".json", filetypes=[("json file", "*.json")])
+        file_path = filedialog.asksaveasfile(mode="w", defaultextension=".json",
+                                             filetypes=[("json file", "*.json")], initialfile=initialfile)
 
     json_str = json.dumps(data, indent=4)
 
@@ -341,26 +349,37 @@ def plot_3d(x, y, z, title_x=None, title_y=None, title_z=None):
 def main():
     # plt.style.use("dark_background")
 
-    param_dict = read_json_file("Parameters/permeability.json")
-
     data_files = select_data_files()
 
-    for datafile in data_files:
-        data = read_data_file(datafile)
+    main_loop = True
+    while main_loop:
+        param_dict = read_json_file("Parameters/permeability.json")
 
-        # filter_parameter_analysis(data, param_dict)
+        for datafile in data_files:
+            data = read_data_file(datafile)
 
-        data = filter_data(data[0], data[3], threshold=0.1, smooth_factor=25, optimize=True)
+            # filter_parameter_analysis(data, param_dict)
 
-        result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], display_info=False)
+            data = filter_data(data[0], data[3], threshold=0.2, smooth_factor=25, optimize=False)
 
-        result_dict["filter_parameters"] = data[2]
+            result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], display_info=False)
 
-        result_dict["fit_parameters"] = param_dict
+            result_dict["filter_parameters"] = data[2]
 
-        write_json_file(result_dict)
+            result_dict["fit_parameters"] = param_dict
 
-        plt.show()
+            result_dict["data_file"] = datafile
+
+            print(result_dict)
+            plt.show()
+
+            write_file = input(f"Save results of {datafile} (y/n/q)? ")
+
+            if write_file == "y":
+                write_json_file(result_dict, initialfile=shorten_filepath(datafile))
+                main_loop = False
+            elif write_file == "q":
+                main_loop = False
 
 
 if __name__ == "__main__":
