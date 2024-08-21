@@ -158,12 +158,11 @@ def smooth_curve(x, y, smoothing_factor, plot=True, widget=None, mode="full", la
     return moving_average
 
 
-def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=None,
-                     style_raw="o", color_raw=None, style_fit="-", color_fit=None,
-                     show_fit_interval=True, show_equilibrium_value=True, display_info=True,
-                     title="Permeate Flux", data_name=None, plot=True):
-
-    results = None
+def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list[float] = None, plot: bool = True,
+                     ax: plt.Axes = None, plot_title: str = "Permeate Flux", data_name: str = None,
+                     style_raw: str = "o", color_raw=None, style_fit: str = "-", color_fit=None,
+                     plot_fit_interval: bool = True, plot_equilibrium_value: bool = True,
+                     display_results_in_plot: bool = True):
 
     if ax is None and plot:
         ax = plt.gca()
@@ -197,16 +196,16 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
         if plot:
             ax.plot(resolved_x, exp_function(np.asarray(resolved_x), *optimized_parameters),
                     style_fit, color=color_fit, label=f"fit for {data_name}" if data_name is not None else None)
-            ax.set_title(title)
+            ax.set_title(plot_title)
             ax.set_xlabel("$t - t_0$ / min")
 
-            if display_info:
+            if display_results_in_plot:
                 ax.text(0.01, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
                 ax.text(0.01, 0.90, f"pred. $F_V$ = {round(optimized_parameters[2], 2)} mL / min", transform=ax.transAxes)
                 ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
                 ax.text(0.01, 0.80, "$\\bar{F_V}$ = " + f" = {round(average_last_min, 2)} mL / min", transform=ax.transAxes)
 
-            if show_equilibrium_value:
+            if plot_equilibrium_value:
                 ax.vlines(equilibrium_time, 0, 10, linestyles="dotted")
                 ax.hlines(optimized_parameters[2], optimization_start, equilibrium_time + 10, linestyles="dotted")
 
@@ -218,9 +217,10 @@ def plot_and_process(data: tuple[list, list], parameters, fit_bounds=None, ax=No
         }
         
     except RuntimeError:
-        print("Could not fit to function using the given data!")
+        print("Could not fit to function using the given data! You might try to filter the data before analysis.")
+        results = {}
 
-    if show_fit_interval and plot:
+    if plot_fit_interval and plot:
         ax.vlines(relative_time[start], 0, 10, linestyles="dotted", color="#fa8174")
         ax.vlines(relative_time[end], 0, 10, linestyles="dotted", color="#fa8174")
 
