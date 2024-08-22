@@ -36,7 +36,7 @@ def shorten_filepath(filepath: str, remove_extension=True) -> str:
     return short
 
 
-def read_json_file(file_path: str) -> None:
+def read_json_file(file_path: str) -> dict:
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             data = json.load(file)
@@ -131,7 +131,7 @@ def filter_data(x: list[Union[float, int]], y: list[Union[float, int]], smooth_f
     else:
         smooth_y = y
 
-    filtered_x, filtered_y = _bandpass_filter(smooth_y, threshold, x, y)
+    filtered_x, filtered_y = _bandpass_filter(x, y, smooth_y, threshold)
 
     percentage_datapoints_preserved = len(filtered_x) / len(x)
 
@@ -394,11 +394,11 @@ def main():
             unfiltered_result_dict = plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400], ax=ax_raw)
 
             unfiltered_result_dict["fit_parameters"] = param_dict
-            unfiltered_result_dict["data_file"] = datafile
+            unfiltered_result_dict["data_file"] = shorten_filepath(datafile, remove_extension=False)
 
             data = filter_data(data[0], data[3], threshold=0.2, smooth_factor=25, optimize_threshold=False)
 
-            result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed)
+            result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed, plot_title="Filtered Data")
 
             result_dict["filter_parameters"] = data[2]
 
