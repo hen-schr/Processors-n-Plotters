@@ -180,13 +180,17 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
                      ax: plt.Axes = None, plot_title: str = "Permeate Flux", data_name: str = None,
                      style_raw: str = "o", color_raw=None, style_fit: str = "-", color_fit=None,
                      plot_fit_interval: bool = True, plot_equilibrium_value: bool = True,
-                     display_results_in_plot: bool = True) -> dict:
+                     display_results_in_plot: bool = True, y_lim_upper=None) -> dict:
     if ax is None and plot:
         ax = plt.gca()
+
+    if y_lim_upper is None:
+        y_lim_upper = np.max(data[1])
 
     relative_time, permeate_flow_mlmin = data
 
     average_last_min = np.mean(permeate_flow_mlmin[-120:])
+    std_last_min = np.std(permeate_flow_mlmin[-120:])
 
     optimization_start = parameters["fit_start"]
     optimization_end = parameters["fit_end"]
@@ -224,16 +228,19 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
                 ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
                 ax.text(0.01, 0.80, "$\\bar{F_V}$ = " + f" = {round(average_last_min, 2)} mL / min",
                         transform=ax.transAxes)
+                ax.text(0.01, 0.75, "$\\sigma_{F_V}$ = " + f" = {round(std_last_min, 4)} mL / min",
+                        transform=ax.transAxes)
 
             if plot_equilibrium_value:
-                ax.vlines(equilibrium_time, 0, 10, linestyles="dotted")
+                ax.vlines(equilibrium_time, 0, y_lim_upper, linestyles="dotted")
                 ax.hlines(optimized_parameters[2], optimization_start, equilibrium_time + 10, linestyles="dotted")
 
         results = {
             "permeateFluxStabilized": optimized_parameters[2],
             "rSquared": round(r_squared, 4),
             "stabilizationTimeMin": equilibrium_time,
-            "finalPermeateFlux": average_last_min
+            "finalPermeateFlux": average_last_min,
+            "stdPermeateFlux": std_last_min
         }
 
     except RuntimeError:
@@ -241,8 +248,8 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
         results = {}
 
     if plot_fit_interval and plot:
-        ax.vlines(relative_time[start], 0, 10, linestyles="dotted", color="#fa8174")
-        ax.vlines(relative_time[end], 0, 10, linestyles="dotted", color="#fa8174")
+        ax.vlines(relative_time[start], 0, y_lim_upper, linestyles="dotted", color="#fa8174")
+        ax.vlines(relative_time[end], 0, y_lim_upper, linestyles="dotted", color="#fa8174")
 
     return results
 
@@ -398,7 +405,8 @@ def main():
 
             data = filter_data(data[0], data[3], threshold=0.2, smooth_factor=25, optimize_threshold=False)
 
-            result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed, plot_title="Filtered Data")
+            result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed,
+                                           plot_title="Filtered Data", y_lim_upper=5)
 
             result_dict["filter_parameters"] = data[2]
 
