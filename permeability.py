@@ -1,3 +1,9 @@
+# This script © 2024 by Henrik Schröter is licensed under CC BY-SA 4.0
+# Email: henrik.schroeter@uni-rostock.de / ORCID 0009-0008-1112-2835
+
+# permeability v1.0
+
+
 import matplotlib.pyplot as plt
 from datetime import datetime
 import scipy.optimize as opt

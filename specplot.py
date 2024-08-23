@@ -1,15 +1,14 @@
-import json
+# This script © 2024 by Henrik Schröter is licensed under CC BY-SA 4.0
+# Email: henrik.schroeter@uni-rostock.de / ORCID 0009-0008-1112-2835
 
+# specplot v1.0
+
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 from tkinter import filedialog
 import scipy.optimize as opt
 import os
-
-# This script © 2024 by Henrik Schröter is licensed under CC BY-SA 4.0
-# Email: henrik.schroeter@uni-rostock.de / ORCID 0009-0008-1112-2835
-
-# specplot v1.0
 
 
 def plot_full_spectrum(file=None, title=None):
@@ -259,11 +258,6 @@ def main():
     """
 
     files = select_spectra_files()
-
-    for file in files:
-        plot_full_spectrum(file)
-    plt.legend()
-    plt.show()
 
     concentration_data = concentrations_from_spec_files(spec_files=files, wavelength=258, conversion_factor=298.1477)
     concentration_data = merge_multiple(concentration_data, erna=-6)
