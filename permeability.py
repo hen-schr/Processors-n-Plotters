@@ -182,6 +182,23 @@ def smooth_curve(x: list[Union[float, int]], y: list[Union[float, int]], smoothi
     return moving_average
 
 
+def calculate_permeate_flux(data: tuple[list, list], effective_area, start_unit: Literal["L h-1", "mL min-1"] = "L h-1"):
+    time, flow_rates = data
+    fluxes = []
+
+    conversion_factor = 1
+
+    if start_unit == "L h-1":
+        conversion_factor = 1
+    elif start_unit == "mL min-1":
+        conversion_factor = 60 / 1000
+
+    for f in flow_rates:
+        flux = round(f / effective_area * conversion_factor, 8)
+        fluxes.append(flux)
+
+    return time, fluxes
+
 def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list[float] = None, plot: bool = True,
                      ax: plt.Axes = None, plot_title: str = "Permeate Flux", data_name: str = None,
                      style_raw: str = "o", color_raw=None, style_fit: str = "-", color_fit=None,
@@ -229,12 +246,12 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
 
             if display_results_in_plot:
                 ax.text(0.01, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
-                ax.text(0.01, 0.90, f"pred. $F_V$ = {round(optimized_parameters[2], 2)} mL / min",
+                ax.text(0.01, 0.90, f"pred. $J_P$ = {round(optimized_parameters[2], 2)} L m-2 h-1",
                         transform=ax.transAxes)
                 ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
-                ax.text(0.01, 0.80, "$\\bar{F_V}$ = " + f" = {round(average_last_min, 2)} mL / min",
+                ax.text(0.01, 0.80, "$\\bar{J_P}$ = " + f" = {round(average_last_min, 2)} L m-2 h-1",
                         transform=ax.transAxes)
-                ax.text(0.01, 0.75, "$\\sigma_{F_V}$ = " + f" = {round(std_last_min, 4)} mL / min",
+                ax.text(0.01, 0.75, "$\\sigma_{J_P}$ = " + f" = {round(std_last_min, 4)} L m-2 h-1",
                         transform=ax.transAxes)
 
             if plot_equilibrium_value:
@@ -324,7 +341,7 @@ def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresho
         ax2.set_title("$R^2$")
         ax3.set_title("Equilbration Time")
 
-        ax.set_ylabel("Flux / $mL \; min^{-1}$")
+        ax.set_ylabel("Flux / $mL \\; min^{-1}$")
         ax2.set_ylabel("$R^2$")
         ax3.set_ylabel("t / min")
         ax.set_xlabel("Filter threshold")
@@ -332,7 +349,7 @@ def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresho
         ax3.set_xlabel("Filter threshold")
 
         ax4.scatter(results[0], results[2])
-        ax4.set_xlabel('Stablized Permeate Flux (calculated) / $mL \; min^{-1}$')
+        ax4.set_xlabel('Stablized Permeate Flux (calculated) / $L \\; m^{-2} \\; h^{-1}$')
         ax4.set_ylabel('$R^2$')
 
     ax.legend()
@@ -402,17 +419,19 @@ def main():
 
             data = read_data_file(datafile)
 
+            data = calculate_permeate_flux((data[0], data[3]), effective_area=0.00256, start_unit="mL min-1")
+
             # filter_parameter_analysis(data, param_dict)
 
-            unfiltered_result_dict = plot_and_process((data[0], data[3]), param_dict, fit_bounds=[-400, 400], ax=ax_raw)
+            unfiltered_result_dict = plot_and_process(data, param_dict, fit_bounds=[-400, 400], ax=ax_raw)
 
             unfiltered_result_dict["fit_parameters"] = param_dict
             unfiltered_result_dict["data_file"] = shorten_filepath(datafile, remove_extension=False)
 
-            data = filter_data(data[0], data[3], threshold=0.2, smooth_factor=25, optimize_threshold=False)
+            data = filter_data(data[0], data[1], threshold=0.2, smooth_factor=25, optimize_threshold=False)
 
             result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed,
-                                           plot_title="Filtered Data", y_lim_upper=5)
+                                           plot_title="Filtered Data")
 
             result_dict["filter_parameters"] = data[2]
 
