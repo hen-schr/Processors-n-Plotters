@@ -11,6 +11,7 @@ import numpy as np
 import json
 from tkinter import filedialog
 from typing import Union, Tuple, Literal
+import pandas as pd
 
 
 def exp_function(x, a, b, c, d):
@@ -67,6 +68,15 @@ def write_json_file(data: dict, file_path: str = None, filename_suggestion: str 
     else:
         with open(file_path, "w") as writefile:
             writefile.write(json_str)
+
+
+def write_data_to_csv_file(data: Union[list[list], tuple[list, list]], file_path: str = None, header: list[str] = None):
+    df = pd.DataFrame(data).T
+    df.columns = header
+
+    print(df)
+
+    df.to_csv(file_path, index=False, sep=";", decimal=".")
 
 
 def read_data_file(file: str = None, return_relative_time: bool = True, start_time: str = None
@@ -428,12 +438,12 @@ def main():
             unfiltered_result_dict["fit_parameters"] = param_dict
             unfiltered_result_dict["data_file"] = shorten_filepath(datafile, remove_extension=False)
 
-            data = filter_data(data[0], data[1], threshold=0.2, smooth_factor=25, optimize_threshold=False)
+            filtered_data = filter_data(data[0], data[1], threshold=0.2, smooth_factor=25, optimize_threshold=False)
 
-            result_dict = plot_and_process((data[0], data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed,
+            result_dict = plot_and_process((filtered_data[0], filtered_data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed,
                                            plot_title="Filtered Data")
 
-            result_dict["filter_parameters"] = data[2]
+            result_dict["filter_parameters"] = filtered_data[2]
 
             unfiltered_result_dict["filtered_results"] = result_dict
             plt.show()
@@ -442,6 +452,11 @@ def main():
 
             if write_file == "y":
                 write_json_file(unfiltered_result_dict, filename_suggestion=shorten_filepath(datafile))
+                to_write = [filtered_data[0], filtered_data[1]]
+
+                write_data_to_csv_file(to_write, "test.csv",
+                                       header=["time_min", "permeateFlux_LMH"])
+
                 main_loop = False
             elif write_file == "q":
                 main_loop = False
