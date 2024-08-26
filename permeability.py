@@ -70,11 +70,15 @@ def write_json_file(data: dict, file_path: str = None, filename_suggestion: str 
             writefile.write(json_str)
 
 
-def write_data_to_csv_file(data: Union[list[list], tuple[list, list]], file_path: str = None, header: list[str] = None):
+def write_data_to_csv_file(data: Union[list[list], tuple[list, list]], file_path: str = None, header: list[str] = None,
+                           filename_suggestion: str = "unnamed.csv"):
     df = pd.DataFrame(data).T
     df.columns = header
 
-    print(df)
+    if file_path is None:
+        file_path = filedialog.asksaveasfile(mode="w", defaultextension=".json",
+                                             filetypes=[("json file", "*.json")], initialfile=filename_suggestion)
+        file_path = file_path.name
 
     df.to_csv(file_path, index=False, sep=";", decimal=".")
 
@@ -426,6 +430,9 @@ def main():
         for datafile in data_files:
 
             fig, (ax_raw, ax_processed) = plt.subplots(2)
+            plt.tight_layout()
+
+            fig.set_size_inches(18.5, 10.5)
 
             data = read_data_file(datafile)
 
@@ -454,8 +461,10 @@ def main():
                 write_json_file(unfiltered_result_dict, filename_suggestion=shorten_filepath(datafile))
                 to_write = [filtered_data[0], filtered_data[1]]
 
-                write_data_to_csv_file(to_write, "test.csv",
-                                       header=["time_min", "permeateFlux_LMH"])
+                write_data_to_csv_file(to_write, header=["time_min", "permeateFlux_LMH"],
+                                       filename_suggestion="FilteredPermeateFlux_"
+                                                           + shorten_filepath(datafile) + ".csv")
+                fig.savefig("Plots/" + shorten_filepath(datafile) + ".png")
 
                 main_loop = False
             elif write_file == "q":
