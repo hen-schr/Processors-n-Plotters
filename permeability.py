@@ -12,6 +12,7 @@ import json
 from tkinter import filedialog
 from typing import Union, Tuple, Literal
 import pandas as pd
+import pyplot_layouts as pll
 
 
 def exp_function(x, a, b, c, d):
@@ -213,6 +214,7 @@ def calculate_permeate_flux(data: tuple[list, list], effective_area, start_unit:
 
     return time, fluxes
 
+
 def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list[float] = None, plot: bool = True,
                      ax: plt.Axes = None, plot_title: str = "Permeate Flux", data_name: str = None,
                      style_raw: str = "o", color_raw=None, style_fit: str = "-", color_fit=None,
@@ -269,8 +271,10 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
                         transform=ax.transAxes)
 
             if plot_equilibrium_value:
-                ax.vlines(equilibrium_time, 0, y_lim_upper, linestyles="dotted")
-                ax.hlines(optimized_parameters[2], optimization_start, equilibrium_time + 10, linestyles="dotted")
+                ax.vlines(equilibrium_time, 0, y_lim_upper, linestyles="dotted", color=color_raw,
+                          label="Within 5 % of $J_P^{eq.}$")
+                ax.hlines(optimized_parameters[2], optimization_start, equilibrium_time + 10, linestyles="dotted",
+                          color=color_raw)
 
         results = {
             "permeateFluxStabilized": optimized_parameters[2],
@@ -285,8 +289,8 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
         results = {}
 
     if plot_fit_interval and plot:
-        ax.vlines(relative_time[start], 0, y_lim_upper, linestyles="dotted", color="#fa8174")
-        ax.vlines(relative_time[end], 0, y_lim_upper, linestyles="dotted", color="#fa8174")
+        ax.vlines(relative_time[start], 0, y_lim_upper, linestyles="dotted", color=color_fit, label="Fit interval")
+        ax.vlines(relative_time[end], 0, y_lim_upper, linestyles="dotted", color=color_fit)
 
     return results
 
@@ -430,7 +434,7 @@ def main():
         for datafile in data_files:
 
             fig, (ax_raw, ax_processed) = plt.subplots(2)
-            plt.tight_layout()
+            fig.tight_layout()
 
             fig.set_size_inches(18.5, 10.5)
 
@@ -440,19 +444,22 @@ def main():
 
             # filter_parameter_analysis(data, param_dict)
 
-            unfiltered_result_dict = plot_and_process(data, param_dict, fit_bounds=[-400, 400], ax=ax_raw)
+            unfiltered_result_dict = plot_and_process(data, param_dict, fit_bounds=[-400, 400], ax=ax_raw,
+                                                      color_raw=pll.uni_color, color_fit=pll.mnf_color)
 
             unfiltered_result_dict["fit_parameters"] = param_dict
             unfiltered_result_dict["data_file"] = shorten_filepath(datafile, remove_extension=False)
 
             filtered_data = filter_data(data[0], data[1], threshold=0.2, smooth_factor=25, optimize_threshold=False)
 
-            result_dict = plot_and_process((filtered_data[0], filtered_data[1]), param_dict, fit_bounds=[-400, 400], ax=ax_processed,
-                                           plot_title="Filtered Data")
+            result_dict = plot_and_process((filtered_data[0], filtered_data[1]), param_dict, fit_bounds=[-400, 400],
+                                           ax=ax_processed, plot_title="Filtered Data",
+                                           color_raw=pll.uni_color, color_fit=pll.mnf_color)
 
             result_dict["filter_parameters"] = filtered_data[2]
 
             unfiltered_result_dict["filtered_results"] = result_dict
+            plt.legend()
             plt.show()
 
             write_file = input(f"Save results of {datafile} (y/n/q)? ")
