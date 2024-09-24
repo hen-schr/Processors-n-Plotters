@@ -1,7 +1,7 @@
 # This script © 2024 by Henrik Schröter is licensed under CC BY-SA 4.0
 # Email: henrik.schroeter@uni-rostock.de / ORCID 0009-0008-1112-2835
 
-# permeability v1.0
+script_version = "1.0"
 
 
 import matplotlib.pyplot as plt
@@ -216,15 +216,19 @@ def calculate_permeate_flux(data: tuple[list, list], effective_area, start_unit:
 
 
 def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list[float] = None, plot: bool = True,
-                     ax: plt.Axes = None, plot_title: str = "Permeate Flux", data_name: str = None,
+                     ax: plt.Axes = None, plot_title: str = None, data_name: str = None,
                      style_raw: str = "o", color_raw=None, style_fit: str = "-", color_fit=None,
                      plot_fit_interval: bool = True, plot_equilibrium_value: bool = True,
-                     display_results_in_plot: bool = True, y_lim_upper=None) -> dict:
+                     display_results_in_plot: bool = True, y_lim_upper=None, plot_fit=True, x_lim_upper=None,
+                     axlabel_fontsize=12, text_offset_x=0.1) -> dict:
     if ax is None and plot:
         ax = plt.gca()
 
     if y_lim_upper is None:
         y_lim_upper = np.max(data[1])
+
+    if x_lim_upper is not None:
+        ax.set_xlim(0, x_lim_upper)
 
     relative_time, permeate_flow_mlmin = data
 
@@ -238,6 +242,9 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
 
     if plot:
         ax.plot(relative_time, permeate_flow_mlmin, style_raw, color=color_raw, label=data_name)
+        ax.set_title(plot_title)
+        ax.set_xlabel("$t - t_0$ / min", fontsize=axlabel_fontsize)
+        ax.set_ylabel("$J_P$ / $L \\; m^{-2} \\; h^{-1}$", fontsize=axlabel_fontsize)
 
     try:
 
@@ -245,7 +252,7 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
         optimized_parameters, pcov = opt.curve_fit(exp_function, relative_time[start:end],
                                                    permeate_flow_mlmin[start:end],
                                                    bounds=fit_bounds)
-        resolved_x = np.linspace(optimization_start, optimization_end + 30, 100)
+        resolved_x = np.linspace(optimization_start, optimization_end, 100)
 
         r_squared = calculate_r_squared(relative_time[start:end], permeate_flow_mlmin[start:end],
                                         optimized_parameters, exp_function)
@@ -254,20 +261,18 @@ def plot_and_process(data: tuple[list, list], parameters: dict, fit_bounds: list
                             optimized_parameters[3]) / optimized_parameters[1]
         equilibrium_time = round(equilibrium_time, 0)
 
-        if plot:
+        if plot and plot_fit:
             ax.plot(resolved_x, exp_function(np.asarray(resolved_x), *optimized_parameters),
                     style_fit, color=color_fit, label=f"fit for {data_name}" if data_name is not None else None)
-            ax.set_title(plot_title)
-            ax.set_xlabel("$t - t_0$ / min")
 
             if display_results_in_plot:
-                ax.text(0.01, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
-                ax.text(0.01, 0.90, f"pred. $J_P$ = {round(optimized_parameters[2], 2)} L m-2 h-1",
+                ax.text(text_offset_x, 0.95, f"$R^2$ = {round(r_squared, 4)}", transform=ax.transAxes)
+                ax.text(text_offset_x, 0.90, f"pred. $J_P$ = {round(optimized_parameters[2], 2)}" + " $L \\; m^{-2} \\; h^{-1}$",
                         transform=ax.transAxes)
-                ax.text(0.01, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
-                ax.text(0.01, 0.80, "$\\bar{J_P}$ = " + f" = {round(average_last_min, 2)} L m-2 h-1",
+                ax.text(text_offset_x, 0.85, f"pred. eq. time = {equilibrium_time} min", transform=ax.transAxes)
+                ax.text(text_offset_x, 0.80, "$\\bar{J_P}$ = " + f" = {round(average_last_min, 2)}" + " $L \\; m^{-2} \\; h^{-1}$",
                         transform=ax.transAxes)
-                ax.text(0.01, 0.75, "$\\sigma_{J_P}$ = " + f" = {round(std_last_min, 4)} L m-2 h-1",
+                ax.text(text_offset_x, 0.75, "$\\sigma_{J_P}$ = " + f" = {round(std_last_min, 4)}" + " $L \\; m^{-2} \\; h^{-1}$",
                         transform=ax.transAxes)
 
             if plot_equilibrium_value:
@@ -322,9 +327,10 @@ def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresho
     if thresholds is None:
         thresholds = [0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.15, 0.17, 0.20, 0.25, 0.5, 1.0]
 
-    results = [[], [], [], []]
     used_thresholds = []
     used_smoothing_factors = []
+
+    calc_results = {"rSquared": [], "permeateFluxStabilized": [], "pts_preserved": [], "stabilizationTimeMin": []}
 
     fig, ((ax, ax2), (ax3, ax4)) = plt.subplots(2, 2)
 
@@ -337,17 +343,17 @@ def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresho
         pts_preserved = []
         for t_h in thresholds:
             filter_result = filter_data(data[0], data[3], smooth_factor=s_f, threshold=t_h)
-            pts_preserved.append(filter_result[2])
+            pts_preserved.append(filter_result[2]["pts_preserved"])
             filtered_data = filter_result[0:2]
             result = plot_and_process(filtered_data, fit_parameters, fit_bounds=[-150, 150], plot=False)
             used_t_h.append(t_h)
             r_squared.append(result["rSquared"])
             eq_values.append(result["permeateFluxStabilized"])
             eq_times.append(result["stabilizationTimeMin"])
-            results[0].append(result["permeateFluxStabilized"])
-            results[1].append(result["stabilizationTimeMin"])
-            results[2].append(result["rSquared"])
-            results[3].append(pts_preserved[-1])
+            calc_results["permeateFluxStabilized"].append(result["permeateFluxStabilized"])
+            calc_results["stabilizationTimeMin"].append(result["stabilizationTimeMin"])
+            calc_results["rSquared"].append(result["rSquared"])
+            calc_results["pts_preserved"].append(pts_preserved[-1])
             used_thresholds.append(t_h)
             used_smoothing_factors.append(s_f)
 
@@ -366,22 +372,22 @@ def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresho
         ax2.set_xlabel("Filter threshold")
         ax3.set_xlabel("Filter threshold")
 
-        ax4.scatter(results[0], results[2])
+        ax4.scatter(calc_results["permeateFluxStabilized"], calc_results["rSquared"])
         ax4.set_xlabel('Stablized Permeate Flux (calculated) / $L \\; m^{-2} \\; h^{-1}$')
         ax4.set_ylabel('$R^2$')
 
     ax.legend()
     plt.show()
 
-    _summarize_filter_analysis(used_smoothing_factors, used_thresholds, results)
+    _summarize_filter_analysis(used_smoothing_factors, used_thresholds, calc_results)
 
-    plot_3d(used_smoothing_factors, used_thresholds, results[0],
+    plot_3d(used_smoothing_factors, used_thresholds, calc_results["permeateFluxStabilized"],
             "Stablized Permeate Flux (calculated) / $mL \\; min^{-1}$")
-    plot_3d(used_smoothing_factors, used_thresholds, results[1],
+    plot_3d(used_smoothing_factors, used_thresholds, calc_results["stabilizationTimeMin"],
             title_x="Filter threshold", title_y="Smoothing factor", title_z="Stablization Time (calc.) / min")
-    plot_3d(used_smoothing_factors, used_thresholds, results[2],
+    plot_3d(used_smoothing_factors, used_thresholds, calc_results["rSquared"],
             title_x="Filter threshold", title_y="Smoothing factor", title_z="$R^2$ / -")
-    plot_3d(used_smoothing_factors, used_thresholds, results[3],
+    plot_3d(used_smoothing_factors, used_thresholds, calc_results["pts_preserved"],
             title_x="Filter threshold", title_y="Smoothing factor", title_z="Pts Preserved / -")
 
     plt.show()
@@ -389,22 +395,24 @@ def filter_parameter_analysis(data, fit_parameters, smooth_factors=None, thresho
 
 def _summarize_filter_analysis(smooth_factors: list[int], thresholds: list[float], results: dict, r_min: float = .9,
                                pts_min: float = .8) -> None:
-    r_max_index = results[2].index(max(results[2]))
-    print(f"best R2 ({results[2][r_max_index]}): s = {smooth_factors[r_max_index]}, t = {thresholds[r_max_index]}")
+
+    r_max_index = results["rSquared"].index(max(results["rSquared"]))
+    print(f"""best R2 ({results["rSquared"][r_max_index]}): s = {smooth_factors[r_max_index]}, t = {thresholds[r_max_index]}""")
 
     closest_to_pts_min = 1
-    for i, pt in enumerate(results[3]):
+    for i, pt in enumerate(results["pts_preserved"]):
         diff = pt - pts_min
-        if 0 <= diff < closest_to_pts_min - pts_min and results[2][i] >= r_min:
+        if 0 <= diff < closest_to_pts_min - pts_min and results["rSquared"][i] >= r_min:
             closest_to_pts_min = pt
 
-    best_pts_index = results[3].index(closest_to_pts_min)
-    print(f"max_min pts ({round(results[3][best_pts_index] * 100, 2)} %): s = {smooth_factors[best_pts_index]}, "
-          f"t = {thresholds[best_pts_index]}, "
-          f"R2 = {results[2][best_pts_index]}")
+    best_pts_index = results["pts_preserved"].index(closest_to_pts_min)
 
-    mean_permeate_flux = (np.mean(results[0]), np.std(results[0]))
-    mean_stabilization_time = (np.mean(results[1]), np.std(results[1]))
+    print(f"""max_min pts ({round(results["pts_preserved"][best_pts_index] * 100, 2)} %): s = {smooth_factors[best_pts_index]}, """
+          f"t = {thresholds[best_pts_index]}, "
+          f"""R2 = {results["rSquared"][best_pts_index]}""")
+
+    mean_permeate_flux = (np.mean(results["permeateFluxStabilized"]), np.std(results["permeateFluxStabilized"]))
+    mean_stabilization_time = (np.mean(results["stabilizationTimeMin"]), np.std(results["stabilizationTimeMin"]))
 
     print(f"Mean stablization time: {mean_stabilization_time} min")
     print(f"Mean stablized permeate flux: {mean_permeate_flux} mL/min")
@@ -423,7 +431,14 @@ def plot_3d(x: list[Union[int, float]], y: list[Union[int, float]], z: list[Unio
 
 
 def main():
+
+    global script_version
+
+    # print(plt.style.available)
+
     # plt.style.use("dark_background")
+    plt.style.use('seaborn-v0_8-poster')
+    plt.rcParams.update({'font.size': 18})
 
     data_files = select_data_files()
 
@@ -433,32 +448,35 @@ def main():
 
         for datafile in data_files:
 
-            fig, (ax_raw, ax_processed) = plt.subplots(2)
-            fig.tight_layout()
-
-            fig.set_size_inches(18.5, 10.5)
+            fig, ax_processed = plt.subplots(1)
 
             data = read_data_file(datafile)
 
             data = calculate_permeate_flux((data[0], data[3]), effective_area=0.00256, start_unit="mL min-1")
 
-            # filter_parameter_analysis(data, param_dict)
+            unfiltered_result_dict = plot_and_process(data, param_dict, fit_bounds=[-400, 400], plot=False,
+                                                      color_raw=pll.uni_color, color_fit=pll.mnf_color, y_lim_upper=120)
 
-            unfiltered_result_dict = plot_and_process(data, param_dict, fit_bounds=[-400, 400], ax=ax_raw,
-                                                      color_raw=pll.uni_color, color_fit=pll.mnf_color)
 
             unfiltered_result_dict["fit_parameters"] = param_dict
+            unfiltered_result_dict["scriptVersion"] = script_version
             unfiltered_result_dict["data_file"] = shorten_filepath(datafile, remove_extension=False)
 
-            filtered_data = filter_data(data[0], data[1], threshold=0.2, smooth_factor=25, optimize_threshold=False)
+            filtered_data = filter_data(data[0], data[1], threshold=param_dict["filter_threshold"],
+                                        smooth_factor=param_dict["smooth_factor"], optimize_threshold=False)
 
             result_dict = plot_and_process((filtered_data[0], filtered_data[1]), param_dict, fit_bounds=[-400, 400],
-                                           ax=ax_processed, plot_title="Filtered Data",
-                                           color_raw=pll.uni_color, color_fit=pll.mnf_color)
+                                           ax=ax_processed,
+                                           color_raw=pll.uni_color, color_fit=pll.mnf_color, y_lim_upper=None,
+                                           axlabel_fontsize=25, text_offset_x=0.2)
 
             result_dict["filter_parameters"] = filtered_data[2]
 
             unfiltered_result_dict["filtered_results"] = result_dict
+
+            plt.yticks(fontsize=20)
+            plt.xticks(fontsize=20)
+
             plt.legend()
             plt.show()
 
